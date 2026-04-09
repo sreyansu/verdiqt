@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String     @id @default(auto()) @map("_id") @db.ObjectId
+  clerkId       String     @unique
+  email         String     @unique
+  name          String
+  role          String     @default("FREELANCER")
+  avatarUrl     String?
+  walletBalance Float      @default(0)
+  createdAt     DateTime   @default(now())
+
+  clientContracts     Contract[]  @relation("ClientContracts")
+  freelancerContracts Contract[]  @relation("FreelancerContracts")
+  raisedDisputes      Dispute[]   @relation("RaisedDisputes")
+  evidenceFiles       Evidence[]
+}
+
+model Contract {
+  id             String     @id @default(auto()) @map("_id") @db.ObjectId
+  title          String
+  description    String
+  totalAmount    Float
+  currency       String     @default("INR")
+  status         String     @default("DRAFT")
+  startDate      DateTime
+  endDate        DateTime
+  scopeDocument  String?
+  clientId       String     @db.ObjectId
+  freelancerId   String     @db.ObjectId
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  client         User       @relation("ClientContracts", fields: [clientId], references: [id])
+  freelancer     User       @relation("FreelancerContracts", fields: [freelancerId], references: [id])
+  milestones     Milestone[]
+  dispute        Dispute?
+  escrowWallet   EscrowWallet?
+}
+
+model Milestone {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  contractId  String     @db.ObjectId
+  title       String
+  description String
+  amount      Float
+  dueDate     DateTime
+  status           String     @default("PENDING")
+  completedAt      DateTime?
+  submissionNote   String?
+  submissionFiles  Json?
+  submittedAt      DateTime?
+  createdAt        DateTime   @default(now())
+
+  contract    Contract   @relation(fields: [contractId], references: [id])
+}
+
+model EscrowWallet {
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  contractId           String   @unique @db.ObjectId
+  totalAmount          Float
+  heldAmount           Float
+  releasedToFreelancer Float    @default(0)
+  refundedToClient     Float    @default(0)
+  status               String   @default("HOLDING")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  contract             Contract @relation(fields: [contractId], references: [id])
+}
+
+model Dispute {
+  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
+  contractId          String    @unique @db.ObjectId
+  raisedById          String    @db.ObjectId
+  title               String
+  clientStatement     String
+  freelancerStatement String?
+  status              String    @default("OPEN")
+  createdAt           DateTime  @default(now())
+  resolvedAt          DateTime?
+
+  contract            Contract  @relation(fields: [contractId], references: [id])
+  raisedBy            User      @relation("RaisedDisputes", fields: [raisedById], references: [id])
+  evidence            Evidence[]
+  verdict             Verdict?
+}
+
+model Evidence {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  disputeId    String   @db.ObjectId
+  uploadedById String   @db.ObjectId
+  fileName     String
+  fileUrl      String
+  fileType     String
+  description  String?
+  createdAt    DateTime @default(now())
+
+  dispute      Dispute  @relation(fields: [disputeId], references: [id])
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+}
+
+model Verdict {
+  id                       String    @id @default(auto()) @map("_id") @db.ObjectId
+  disputeId                String    @unique @db.ObjectId
+  clientFaultPercent       Float
+  freelancerFaultPercent   Float
+  clientRefundPercent      Float
+  freelancerReleasePercent Float
+  reasoning                String
+  contractAnalysis         String
+  evidenceSummary          String
+  confidenceScore          Float
+  escalatedToHuman         Boolean   @default(false)
+  modelUsed                String
+  createdAt                DateTime  @default(now())
+  acceptedAt               DateTime?
+
+  dispute                  Dispute   @relation(fields: [disputeId], references: [id])
+}

@@ -1,0 +1,45 @@
+import type { Metadata } from "next";
+import "./globals.css";
+import QueryProvider from "@/lib/providers/QueryProvider";
+import { AuthProvider } from "@/providers/AuthProvider";
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+
+export const metadata: Metadata = {
+  title: "Verdiqt — Freelance Escrow & AI Arbitration Platform",
+  description:
+    "Smart escrow and AI-powered dispute resolution for freelancers and clients. Fair. Fast. AI-Powered.",
+  keywords: [
+    "escrow",
+    "freelance",
+    "dispute resolution",
+    "AI mediation",
+    "arbitration",
+  ],
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" className={cn("h-full antialiased", geist.variable)}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="min-h-full flex flex-col font-sans">
+        <QueryProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </QueryProvider>
+      </body>
+    </html>
+  );
+}
