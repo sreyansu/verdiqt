@@ -6,13 +6,19 @@ import { validate } from "../middleware/validate";
 
 const router = Router();
 
+// Accept any ISO 8601 datetime string (with or without milliseconds/offset)
+const isoDatetime = z.string().refine(
+  (val) => !isNaN(Date.parse(val)),
+  { message: "Invalid datetime string" }
+);
+
 const createContractSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().min(10),
   totalAmount: z.number().positive(),
   currency: z.string().default("INR"),
-  startDate: z.string().datetime(),
-  endDate: z.string().datetime(),
+  startDate: isoDatetime,
+  endDate: isoDatetime,
   freelancerEmail: z.string().email(),
   milestones: z
     .array(
@@ -20,7 +26,7 @@ const createContractSchema = z.object({
         title: z.string().min(3),
         description: z.string().min(5),
         amount: z.number().positive(),
-        dueDate: z.string().datetime(),
+        dueDate: isoDatetime,
       })
     )
     .min(1),

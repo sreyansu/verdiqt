@@ -3,7 +3,6 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
-import { runMediationEngine } from "../services/mediationEngine";
 import { getIO } from "../lib/socket";
 
 const router = Router();
@@ -194,17 +193,28 @@ router.patch(
   }
 );
 
-// POST /api/disputes/:id/analyze — Trigger AI mediation
-router.post(
-  "/:id/analyze",
+// PATCH /api/disputes/:id/challenge — Client or Freelancer challenges a verdict
+router.patch(
+  "/:id/challenge",
   requireAuthWithUser,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const user = (req as any).dbUser;
+      const { challengeReason } = req.body;
+
+      if (!challengeReason || challengeReason.length < 20) {
+        res.status(400).json({
+          success: false,
+          error: "Challenge reason must be at least 20 characters",
+        });
+        return;
+      }
+
       const dispute = await prisma.dispute.findUnique({
         where: { id: req.params.id },
         include: {
-          contract: { include: { milestones: true } },
-          evidence: true,
+          contract: true,
+          verdict: true,
         },
       });
 
@@ -213,88 +223,67 @@ router.post(
         return;
       }
 
-      if (!dispute.freelancerStatement) {
-        res.status(400).json({
+      // Only parties to the contract can challenge
+      const isClient = dispute.contract.clientId === user.id;
+      const isFreelancer = dispute.contract.freelancerId === user.id;
+      if (!isClient && !isFreelancer) {
+        res.status(403).json({
           success: false,
-          error: "Both parties must submit statements before analysis",
+          error: "Only parties to this dispute can challenge the verdict",
         });
         return;
       }
 
-      // Update status to analyzing
-      await prisma.dispute.update({
-        where: { id: req.params.id },
-        data: { status: "AI_ANALYZING" },
+      // Can only challenge when verdict is ready
+      if (dispute.status !== "VERDICT_READY") {
+        res.status(400).json({
+          success: false,
+          error: "Can only challenge a verdict when status is VERDICT_READY",
+        });
+        return;
+      }
+
+      if (!dispute.verdict) {
+        res.status(400).json({
+          success: false,
+          error: "No verdict exists to challenge",
+        });
+        return;
+      }
+
+      // Max 2 challenges allowed
+      if (dispute.challengeCount >= 2) {
+        res.status(400).json({
+          success: false,
+          error: "Maximum number of challenges (2) has been reached. This dispute must be resolved by an administrator.",
+        });
+        return;
+      }
+
+      // Delete old verdict so admin can re-analyze
+      await prisma.verdict.delete({
+        where: { id: dispute.verdict.id },
       });
 
+      // Update dispute
+      const updated = await prisma.dispute.update({
+        where: { id: req.params.id },
+        data: {
+          status: "CHALLENGED",
+          challengeReason,
+          challengedById: user.id,
+          challengeCount: { increment: 1 },
+        },
+      });
+
+      // Emit realtime update
       const io = getIO();
       io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
         disputeId: dispute.id,
-        status: "AI_ANALYZING",
+        status: "CHALLENGED",
       });
 
-      // Run AI mediation
-      try {
-        const verdict = await runMediationEngine({
-          contractTitle: dispute.contract.title,
-          contractDescription: dispute.contract.description,
-          totalAmount: dispute.contract.totalAmount,
-          milestones: dispute.contract.milestones.map((m: any) => ({
-            title: m.title,
-            description: m.description,
-            amount: m.amount,
-            status: m.status,
-            dueDate: m.dueDate.toISOString(),
-          })),
-          clientStatement: dispute.clientStatement,
-          freelancerStatement: dispute.freelancerStatement,
-          evidenceSummaries: dispute.evidence.map(
-            (e: any) => `${e.fileName} (${e.fileType}): ${e.description || "No description"}`
-          ),
-          disputeTitle: dispute.title,
-        });
-
-        // Save verdict
-        const savedVerdict = await prisma.verdict.create({
-          data: {
-            disputeId: dispute.id,
-            ...verdict,
-            modelUsed: process.env.NODE_ENV === "production" ? "claude-3-7-sonnet-20250219" : "claude-3-5-haiku-20241022",
-          },
-        });
-
-        // Update dispute status
-        await prisma.dispute.update({
-          where: { id: req.params.id },
-          data: { status: "VERDICT_READY" },
-        });
-
-        io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
-          disputeId: dispute.id,
-          status: "VERDICT_READY",
-        });
-
-        res.json({ success: true, data: savedVerdict });
-      } catch (mediationError: any) {
-        console.error("AI Mediation Engine failed:", mediationError);
-
-        // Fallback to ESCALATED status
-        await prisma.dispute.update({
-          where: { id: req.params.id },
-          data: { status: "ESCALATED" },
-        });
-
-        io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
-          disputeId: dispute.id,
-          status: "ESCALATED",
-        });
-
-        res.status(500).json({
-          success: false,
-          error: "AI Mediation failed. The dispute has been escalated for human review.",
-          details: mediationError.message
-        });
-      }
+      res.json({ success: true, data: updated });
     } catch (error) {
       next(error);
     }
@@ -302,3 +291,4 @@ router.post(
 );
 
 export default router;
+

@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 import { requireAuthWithUser, requireAdmin } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
 import { getIO } from "../lib/socket";
+import { runMediationEngine } from "../services/mediationEngine";
 
 const router = Router();
 
@@ -278,6 +279,134 @@ router.get(
       });
 
       res.json({ success: true, data: users });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/admin/disputes/:id/analyze — Admin triggers AI mediation
+router.post(
+  "/disputes/:id/analyze",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const dispute = await prisma.dispute.findUnique({
+        where: { id: req.params.id },
+        include: {
+          contract: { include: { milestones: true } },
+          evidence: true,
+        },
+      });
+
+      if (!dispute) {
+        res.status(404).json({ success: false, error: "Dispute not found" });
+        return;
+      }
+
+      if (!dispute.freelancerStatement) {
+        res.status(400).json({
+          success: false,
+          error: "Both parties must submit statements before analysis",
+        });
+        return;
+      }
+
+      // Cannot analyze if already analyzing
+      if (dispute.status === "AI_ANALYZING") {
+        res.status(400).json({
+          success: false,
+          error: "AI analysis is already in progress",
+        });
+        return;
+      }
+
+      // Update status to analyzing
+      await prisma.dispute.update({
+        where: { id: req.params.id },
+        data: { status: "AI_ANALYZING" },
+      });
+
+      const io = getIO();
+      io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
+        disputeId: dispute.id,
+        status: "AI_ANALYZING",
+      });
+
+      // Delete any existing verdict (re-analysis or seeded data)
+      const existingVerdict = await prisma.verdict.findUnique({
+        where: { disputeId: dispute.id },
+      });
+      if (existingVerdict) {
+        await prisma.verdict.delete({ where: { id: existingVerdict.id } });
+      }
+
+      // Build challenge context if re-analyzing after a challenge
+      const challengeContext = dispute.challengeCount > 0 && dispute.challengeReason
+        ? `\n\n## CHALLENGE CONTEXT\nThis dispute has been challenged ${dispute.challengeCount} time(s).\nLatest challenge reason: "${dispute.challengeReason}"\nPlease carefully re-evaluate considering this challenge.`
+        : "";
+
+      // Run AI mediation
+      try {
+        const verdict = await runMediationEngine({
+          contractTitle: dispute.contract.title,
+          contractDescription: dispute.contract.description,
+          totalAmount: dispute.contract.totalAmount,
+          milestones: dispute.contract.milestones.map((m: any) => ({
+            title: m.title,
+            description: m.description,
+            amount: m.amount,
+            status: m.status,
+            dueDate: m.dueDate.toISOString(),
+          })),
+          clientStatement: dispute.clientStatement,
+          freelancerStatement: dispute.freelancerStatement,
+          evidenceSummaries: dispute.evidence.map(
+            (e: any) => `${e.fileName} (${e.fileType}): ${e.description || "No description"}`
+          ),
+          disputeTitle: dispute.title + challengeContext,
+        });
+
+        // Save verdict
+        const savedVerdict = await prisma.verdict.create({
+          data: {
+            disputeId: dispute.id,
+            ...verdict,
+            modelUsed: process.env.NODE_ENV === "production" ? "claude-3-7-sonnet-20250219" : "claude-3-5-haiku-20241022",
+          },
+        });
+
+        // Update dispute status
+        await prisma.dispute.update({
+          where: { id: req.params.id },
+          data: { status: "VERDICT_READY" },
+        });
+
+        io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
+          disputeId: dispute.id,
+          status: "VERDICT_READY",
+        });
+
+        res.json({ success: true, data: savedVerdict });
+      } catch (mediationError: any) {
+        console.error("AI Mediation Engine failed:", mediationError);
+
+        // Fallback to ESCALATED status
+        await prisma.dispute.update({
+          where: { id: req.params.id },
+          data: { status: "ESCALATED" },
+        });
+
+        io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
+          disputeId: dispute.id,
+          status: "ESCALATED",
+        });
+
+        res.status(500).json({
+          success: false,
+          error: "AI Mediation failed. The dispute has been escalated for human review.",
+          details: mediationError.message,
+        });
+      }
     } catch (error) {
       next(error);
     }

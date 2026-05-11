@@ -84,6 +84,9 @@ model Dispute {
   clientStatement     String
   freelancerStatement String?
   status              String    @default("OPEN")
+  challengeReason     String?
+  challengedById      String?   @db.ObjectId
+  challengeCount      Int       @default(0)
   createdAt           DateTime  @default(now())
   resolvedAt          DateTime?
 

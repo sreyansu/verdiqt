@@ -10,6 +10,8 @@ import {
   IndianRupee,
   Scale,
   Loader2,
+  ShieldAlert,
+  Gavel,
 } from "lucide-react";
 import ConfidenceMeter from "@/components/shared/ConfidenceMeter";
 import { useAuthenticatedApi } from "@/lib/useAuthenticatedApi";
@@ -18,29 +20,39 @@ import { useState } from "react";
 interface VerdictPanelProps {
   verdict: any;
   contract: any;
-  onAccept: () => void;
+  onUpdate: () => void;
   disputeStatus: string;
+  disputeId: string;
+  challengeCount: number;
 }
 
 export default function VerdictPanel({
   verdict,
   contract,
-  onAccept,
+  onUpdate,
   disputeStatus,
+  disputeId,
+  challengeCount,
 }: VerdictPanelProps) {
   const api = useAuthenticatedApi();
   const [accepting, setAccepting] = useState(false);
   const [escalating, setEscalating] = useState(false);
+  const [showChallengeForm, setShowChallengeForm] = useState(false);
+  const [challengeReason, setChallengeReason] = useState("");
+  const [challenging, setChallenging] = useState(false);
+  const [challengeError, setChallengeError] = useState<string | null>(null);
 
   const escrowAmount = contract?.escrowWallet?.heldAmount || 0;
   const freelancerAmount = (escrowAmount * verdict.freelancerReleasePercent) / 100;
   const clientRefund = (escrowAmount * verdict.clientRefundPercent) / 100;
+  const canChallenge = disputeStatus === "VERDICT_READY" && !verdict.acceptedAt && challengeCount < 2;
+  const challengesRemaining = 2 - challengeCount;
 
   const handleAccept = async () => {
     setAccepting(true);
     try {
       await api.post(`/verdicts/${verdict.id}/accept`);
-      onAccept();
+      onUpdate();
     } catch (error) {
       console.error("Failed to accept verdict:", error);
     } finally {
@@ -52,11 +64,35 @@ export default function VerdictPanel({
     setEscalating(true);
     try {
       await api.post(`/verdicts/${verdict.id}/escalate`);
-      onAccept();
+      onUpdate();
     } catch (error) {
       console.error("Failed to escalate:", error);
     } finally {
       setEscalating(false);
+    }
+  };
+
+  const handleChallenge = async () => {
+    if (challengeReason.length < 20) {
+      setChallengeError("Challenge reason must be at least 20 characters.");
+      return;
+    }
+
+    setChallenging(true);
+    setChallengeError(null);
+    try {
+      await api.patch(`/disputes/${disputeId}/challenge`, {
+        challengeReason,
+      });
+      setChallengeReason("");
+      setShowChallengeForm(false);
+      onUpdate();
+    } catch (error: any) {
+      setChallengeError(
+        error.response?.data?.error || "Failed to submit challenge"
+      );
+    } finally {
+      setChallenging(false);
     }
   };
 
@@ -71,10 +107,17 @@ export default function VerdictPanel({
         <div className="bg-gradient-to-r from-accent-primary/10 to-accent-secondary/10 px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
             <Scale className="w-6 h-6 text-accent-primary" />
-            <h3 className="font-display text-xl font-bold">AI Verdict</h3>
+            <h3 className="font-display text-xl font-bold">
+              {disputeStatus === "RESOLVED" ? "Final Verdict" : "AI Verdict"}
+            </h3>
             {verdict.escalatedToHuman && (
               <span className="ml-auto px-3 py-1 rounded-full bg-accent-danger/20 text-accent-danger text-xs font-medium">
                 Escalated to Human Review
+              </span>
+            )}
+            {challengeCount > 0 && (
+              <span className="ml-auto px-3 py-1 rounded-full bg-accent-warning/20 text-accent-warning text-xs font-medium">
+                Re-analyzed after challenge #{challengeCount}
               </span>
             )}
           </div>
@@ -165,11 +208,11 @@ export default function VerdictPanel({
             </div>
           </div>
 
-          {/* Reasoning */}
+          {/* Legal Explanation Sections */}
           <div className="space-y-4">
             <div>
               <h4 className="text-sm font-medium text-text-secondary mb-2 flex items-center gap-2">
-                <Scale className="w-4 h-4" /> Reasoning
+                <Gavel className="w-4 h-4" /> Legal Reasoning
               </h4>
               <p className="text-sm text-text-primary leading-relaxed bg-bg-primary rounded-lg p-4 border border-border">
                 {verdict.reasoning}
@@ -177,7 +220,9 @@ export default function VerdictPanel({
             </div>
 
             <div>
-              <h4 className="text-sm font-medium text-text-secondary mb-2">Contract Analysis</h4>
+              <h4 className="text-sm font-medium text-text-secondary mb-2 flex items-center gap-2">
+                <Scale className="w-4 h-4" /> Contract Analysis
+              </h4>
               <p className="text-sm text-text-primary leading-relaxed bg-bg-primary rounded-lg p-4 border border-border">
                 {verdict.contractAnalysis}
               </p>
@@ -197,34 +242,131 @@ export default function VerdictPanel({
             <span>Generated: {new Date(verdict.createdAt).toLocaleDateString()}</span>
           </div>
 
-          {/* Action buttons */}
+          {/* Action buttons — Accept, Challenge, or Escalate */}
           {disputeStatus === "VERDICT_READY" && !verdict.acceptedAt && (
-            <div className="flex gap-3 pt-2">
-              <Button
-                onClick={handleAccept}
-                disabled={accepting}
-                className="flex-1 bg-accent-success hover:bg-accent-success/90"
-              >
-                {accepting ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            <div className="space-y-4">
+              {/* Primary Actions */}
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleAccept}
+                  disabled={accepting}
+                  className="flex-1 bg-accent-success hover:bg-accent-success/90"
+                >
+                  {accepting ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                  )}
+                  Accept Verdict
+                </Button>
+
+                {canChallenge ? (
+                  <Button
+                    onClick={() => setShowChallengeForm(!showChallengeForm)}
+                    variant="outline"
+                    className="flex-1 border-accent-warning text-accent-warning hover:bg-accent-warning/10"
+                  >
+                    <ShieldAlert className="w-4 h-4 mr-2" />
+                    Challenge Verdict ({challengesRemaining} left)
+                  </Button>
+                ) : challengeCount >= 2 ? (
+                  <Button
+                    onClick={handleEscalate}
+                    disabled={escalating}
+                    variant="outline"
+                    className="flex-1 border-accent-danger text-accent-danger hover:bg-accent-danger/10"
+                  >
+                    {escalating ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 mr-2" />
+                    )}
+                    Escalate to Human
+                  </Button>
                 ) : (
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  <Button
+                    onClick={handleEscalate}
+                    disabled={escalating}
+                    variant="outline"
+                    className="flex-1 border-accent-danger text-accent-danger hover:bg-accent-danger/10"
+                  >
+                    {escalating ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 mr-2" />
+                    )}
+                    Escalate to Human
+                  </Button>
                 )}
-                Accept Verdict
-              </Button>
-              <Button
-                onClick={handleEscalate}
-                disabled={escalating}
-                variant="outline"
-                className="flex-1 border-accent-danger text-accent-danger hover:bg-accent-danger/10"
-              >
-                {escalating ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <AlertTriangle className="w-4 h-4 mr-2" />
-                )}
-                Escalate to Human
-              </Button>
+              </div>
+
+              {/* Challenge count info */}
+              {challengeCount > 0 && challengeCount < 2 && (
+                <p className="text-xs text-text-secondary text-center">
+                  This verdict was re-analyzed after a previous challenge. You have {challengesRemaining} challenge{challengesRemaining !== 1 ? "s" : ""} remaining.
+                </p>
+              )}
+
+              {challengeCount >= 2 && (
+                <div className="p-3 bg-accent-warning/10 rounded-lg border border-accent-warning/20 text-center">
+                  <p className="text-sm text-accent-warning font-medium">
+                    Maximum challenges reached — You may accept or escalate to a human administrator for final resolution.
+                  </p>
+                </div>
+              )}
+
+              {/* Challenge Form */}
+              {showChallengeForm && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="p-4 bg-bg-primary rounded-xl border border-accent-warning/30 space-y-3">
+                    <h4 className="text-sm font-medium flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-accent-warning" />
+                      Challenge this Verdict
+                    </h4>
+                    <p className="text-xs text-text-secondary">
+                      Explain why you believe this verdict is incorrect. The dispute will be sent back to the administrator for re-analysis by the AI. You have {challengesRemaining} challenge{challengesRemaining !== 1 ? "s" : ""} remaining.
+                    </p>
+                    <textarea
+                      value={challengeReason}
+                      onChange={(e) => setChallengeReason(e.target.value)}
+                      placeholder="Explain why you disagree with this verdict (min 20 characters)..."
+                      className="w-full h-24 bg-bg-elevated border border-border rounded-lg p-3 text-sm text-text-primary placeholder:text-text-secondary resize-none focus:border-accent-warning focus:outline-none"
+                    />
+                    {challengeError && (
+                      <p className="text-xs text-accent-danger">{challengeError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleChallenge}
+                        disabled={challenging || challengeReason.length < 20}
+                        className="bg-accent-warning hover:bg-accent-warning/90 text-white"
+                      >
+                        {challenging ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <ShieldAlert className="w-4 h-4 mr-2" />
+                        )}
+                        Submit Challenge
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setShowChallengeForm(false);
+                          setChallengeError(null);
+                        }}
+                        className="text-text-secondary"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </div>
           )}
 

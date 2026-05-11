@@ -17,6 +17,8 @@ import {
   User,
   ArrowLeft,
   Loader2,
+  ShieldAlert,
+  Gavel,
 } from "lucide-react";
 import { useAuthenticatedApi } from "@/lib/useAuthenticatedApi";
 import { useDisputeRealtime } from "@/hooks/useRealtime";
@@ -31,6 +33,7 @@ const stageConfig: Record<string, { icon: any; color: string; label: string }> =
   EVIDENCE_COLLECTION: { icon: Upload, color: "text-accent-secondary", label: "Evidence Collection" },
   AI_ANALYZING: { icon: Brain, color: "text-accent-warning", label: "AI Analyzing" },
   VERDICT_READY: { icon: CheckCircle2, color: "text-accent-success", label: "Verdict Ready" },
+  CHALLENGED: { icon: ShieldAlert, color: "text-accent-warning", label: "Challenged" },
   ESCALATED: { icon: AlertTriangle, color: "text-accent-danger", label: "Escalated" },
   RESOLVED: { icon: Scale, color: "text-text-secondary", label: "Resolved" },
 };
@@ -44,7 +47,6 @@ export default function DisputeDetailPage() {
   const { dbUser } = useUserStore();
   const [dispute, setDispute] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [analyzing, setAnalyzing] = useState(false);
   const [respondText, setRespondText] = useState("");
   const [responding, setResponding] = useState(false);
 
@@ -66,22 +68,10 @@ export default function DisputeDetailPage() {
   // Realtime status updates
   useDisputeRealtime(id as string, (newStatus) => {
     setDispute((prev: any) => (prev ? { ...prev, status: newStatus } : prev));
-    if (newStatus === "VERDICT_READY") {
-      fetchDispute(); // Refetch to get verdict data
+    if (["VERDICT_READY", "RESOLVED", "CHALLENGED", "ESCALATED"].includes(newStatus)) {
+      fetchDispute(); // Refetch to get updated data
     }
   });
-
-  const handleAnalyze = async () => {
-    setAnalyzing(true);
-    try {
-      await api.post(`/disputes/${id}/analyze`);
-      await fetchDispute();
-    } catch (error) {
-      console.error("Analysis failed:", error);
-    } finally {
-      setAnalyzing(false);
-    }
-  };
 
   const handleRespond = async () => {
     setResponding(true);
@@ -117,7 +107,6 @@ export default function DisputeDetailPage() {
   const currentStageIndex = stages.indexOf(dispute.status);
   const isFreelancer = dispute.contract?.freelancerId === dbUser?.id;
   const canRespond = isFreelancer && !dispute.freelancerStatement && dispute.status === "OPEN";
-  const canAnalyze = dispute.freelancerStatement && ["OPEN", "EVIDENCE_COLLECTION"].includes(dispute.status);
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -140,7 +129,7 @@ export default function DisputeDetailPage() {
           </p>
         </div>
         <Badge className={stageConfig[dispute.status]?.color || ""}>
-          {stageConfig[dispute.status]?.label}
+          {stageConfig[dispute.status]?.label || dispute.status}
         </Badge>
       </div>
 
@@ -183,6 +172,69 @@ export default function DisputeDetailPage() {
           })}
         </div>
       </Card>
+
+      {/* Status Banners */}
+      {dispute.status === "AI_ANALYZING" && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Card className="glass-elevated p-6 rounded-xl border-accent-warning/30 text-center">
+            <Brain className="w-10 h-10 text-accent-warning mx-auto mb-3 animate-pulse" />
+            <h3 className="font-display text-lg font-bold mb-1">AI Analysis in Progress</h3>
+            <p className="text-text-secondary text-sm">
+              The administrator has initiated AI analysis of this dispute. Please wait while the system evaluates all statements and evidence.
+            </p>
+          </Card>
+        </motion.div>
+      )}
+
+      {dispute.status === "CHALLENGED" && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Card className="glass-elevated p-6 rounded-xl border-accent-warning/30">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="w-6 h-6 text-accent-warning flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-display font-semibold mb-1">Verdict Under Re-Review</h3>
+                <p className="text-text-secondary text-sm mb-2">
+                  The previous verdict has been challenged. An administrator will re-analyze this dispute considering the challenge.
+                </p>
+                {dispute.challengeReason && (
+                  <div className="p-3 bg-bg-primary rounded-lg border border-border mt-2">
+                    <p className="text-xs text-text-secondary mb-1">Challenge Reason:</p>
+                    <p className="text-sm text-text-primary">&ldquo;{dispute.challengeReason}&rdquo;</p>
+                  </div>
+                )}
+                <p className="text-xs text-text-secondary mt-2">
+                  Challenges used: {dispute.challengeCount} / 2
+                </p>
+              </div>
+            </div>
+          </Card>
+        </motion.div>
+      )}
+
+      {dispute.status === "ESCALATED" && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Card className="glass-elevated p-6 rounded-xl border-accent-danger/30">
+            <div className="flex items-start gap-3">
+              <Gavel className="w-6 h-6 text-accent-danger flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-display font-semibold mb-1">Escalated to Human Administrator</h3>
+                <p className="text-text-secondary text-sm">
+                  This dispute has been escalated for manual review by a platform administrator. You will be notified once a decision is made. The administrator will review all evidence, statements, and any prior AI analysis before making a final determination.
+                </p>
+              </div>
+            </div>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Statements */}
       <div className="grid lg:grid-cols-2 gap-4">
@@ -279,39 +331,22 @@ export default function DisputeDetailPage() {
         )}
       </Card>
 
-      {/* Analyze Button */}
-      {canAnalyze && !dispute.verdict && (
+      {/* Waiting for Admin — shown when both statements submitted but no verdict yet */}
+      {dispute.freelancerStatement &&
+        !dispute.verdict &&
+        ["OPEN", "EVIDENCE_COLLECTION"].includes(dispute.status) && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
         >
-          <Card className="glass-elevated p-8 rounded-xl border-border text-center glow-primary">
-            <Brain className="w-12 h-12 text-accent-primary mx-auto mb-4" />
-            <h3 className="font-display text-xl font-bold mb-2">
-              Ready for AI Analysis
+          <Card className="glass-elevated p-8 rounded-xl border-border text-center">
+            <Clock className="w-10 h-10 text-accent-primary mx-auto mb-3" />
+            <h3 className="font-display text-lg font-bold mb-2">
+              Awaiting Admin Review
             </h3>
-            <p className="text-text-secondary mb-6">
-              Both parties have submitted their statements. Request AI mediation to
-              analyze the dispute and generate a verdict.
+            <p className="text-text-secondary text-sm">
+              Both parties have submitted their statements. A platform administrator will initiate AI analysis and review of this dispute. You will be notified when a verdict is ready.
             </p>
-            <Button
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              size="lg"
-              className="bg-accent-primary hover:bg-accent-primary/90"
-            >
-              {analyzing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Brain className="w-4 h-4 mr-2" />
-                  Request AI Analysis
-                </>
-              )}
-            </Button>
           </Card>
         </motion.div>
       )}
@@ -321,8 +356,10 @@ export default function DisputeDetailPage() {
         <VerdictPanel
           verdict={dispute.verdict}
           contract={dispute.contract}
-          onAccept={fetchDispute}
+          onUpdate={fetchDispute}
           disputeStatus={dispute.status}
+          disputeId={dispute.id}
+          challengeCount={dispute.challengeCount || 0}
         />
       )}
     </div>

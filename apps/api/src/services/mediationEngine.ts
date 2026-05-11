@@ -1,4 +1,4 @@
-import { anthropic } from "../lib/anthropic";
+import { GoogleGenAI, Type, Schema } from "@google/genai";
 
 export interface MediationInput {
   contractTitle: string;
@@ -36,7 +36,6 @@ Your role is to analyze disputes fairly and objectively, considering:
 3. Evidence provided by either party
 4. Standard freelance industry norms and practices
 
-You must return ONLY a valid JSON object — no preamble, no markdown, no explanation outside the JSON.
 Base your analysis strictly on the provided information. If information is insufficient, reflect that in a lower confidence score.
 Never favor one party type (client vs freelancer) categorically.`;
 
@@ -78,40 +77,88 @@ ${
     : "No evidence submitted."
 }
 
----
-
-Return ONLY this JSON structure:
-{
-  "clientFaultPercent": <0-100>,
-  "freelancerFaultPercent": <0-100>,
-  "clientRefundPercent": <0-100, percentage of total escrow to refund client>,
-  "freelancerReleasePercent": <0-100, percentage of total escrow to release to freelancer>,
-  "reasoning": "<3-5 sentence plain English explanation of the verdict>",
-  "contractAnalysis": "<2-3 sentences analyzing how well deliverables matched contract scope>",
-  "evidenceSummary": "<1-2 sentences on how evidence influenced the decision>",
-  "confidenceScore": <0.0-1.0>,
-  "escalatedToHuman": <true if confidence < 0.6 or case is genuinely ambiguous, else false>
-}
-
 Note: clientRefundPercent + freelancerReleasePercent must equal 100.
 Note: clientFaultPercent + freelancerFaultPercent must equal 100.
 `;
 
-  const isDev = process.env.NODE_ENV !== "production";
-  const model = isDev ? "claude-3-5-haiku-20241022" : "claude-3-7-sonnet-20250219";
+  // Initialize Gemini client using their new standard SDK
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const model = "gemini-2.5-flash";
 
-  const response = await anthropic.messages.create({
+  // Define the JSON schema for structured output
+  const responseSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      clientFaultPercent: {
+        type: Type.INTEGER,
+        description: "0-100",
+      },
+      freelancerFaultPercent: {
+        type: Type.INTEGER,
+        description: "0-100",
+      },
+      clientRefundPercent: {
+        type: Type.INTEGER,
+        description: "0-100, percentage of total escrow to refund client",
+      },
+      freelancerReleasePercent: {
+        type: Type.INTEGER,
+        description: "0-100, percentage of total escrow to release to freelancer",
+      },
+      reasoning: {
+        type: Type.STRING,
+        description: "3-5 sentence plain English explanation of the verdict",
+      },
+      contractAnalysis: {
+        type: Type.STRING,
+        description: "2-3 sentences analyzing how well deliverables matched contract scope",
+      },
+      evidenceSummary: {
+        type: Type.STRING,
+        description: "1-2 sentences on how evidence influenced the decision",
+      },
+      confidenceScore: {
+        type: Type.NUMBER,
+        description: "0.0-1.0",
+      },
+      escalatedToHuman: {
+        type: Type.BOOLEAN,
+        description: "true if confidence < 0.6 or case is genuinely ambiguous, else false",
+      },
+    },
+    required: [
+      "clientFaultPercent",
+      "freelancerFaultPercent",
+      "clientRefundPercent",
+      "freelancerReleasePercent",
+      "reasoning",
+      "contractAnalysis",
+      "evidenceSummary",
+      "confidenceScore",
+      "escalatedToHuman",
+    ],
+  };
+
+  const response = await ai.models.generateContent({
     model,
-    max_tokens: 1024,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userPrompt }],
+    contents: userPrompt,
+    config: {
+      systemInstruction: SYSTEM_PROMPT,
+      responseMimeType: "application/json",
+      responseSchema: responseSchema,
+      temperature: 0.2, // Low temperature for consistent analysis
+    },
   });
 
-  const rawText =
-    response.content[0].type === "text" ? response.content[0].text : "";
+  const rawText = response.text || "{}";
+  let verdict: MediationVerdict;
 
-  const clean = rawText.replace(/```json|```/g, "").trim();
-  const verdict: MediationVerdict = JSON.parse(clean);
+  try {
+    verdict = JSON.parse(rawText);
+  } catch (error) {
+    console.error("Failed to parse Gemini output:", rawText);
+    throw new Error("Invalid response format from AI");
+  }
 
   // Safety clamp
   verdict.confidenceScore = Math.max(0, Math.min(1, verdict.confidenceScore));

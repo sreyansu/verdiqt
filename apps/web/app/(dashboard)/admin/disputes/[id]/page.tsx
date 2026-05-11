@@ -18,6 +18,8 @@ import {
   Clock,
   Loader2,
   Gavel,
+  Brain,
+  ShieldAlert,
 } from "lucide-react";
 import { useAuthenticatedApi } from "@/lib/useAuthenticatedApi";
 import { useUserStore } from "@/store/userStore";
@@ -28,6 +30,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   EVIDENCE_COLLECTION: { label: "Collecting Evidence", className: "bg-accent-secondary/20 text-accent-secondary" },
   AI_ANALYZING: { label: "AI Analyzing", className: "bg-accent-warning/20 text-accent-warning" },
   VERDICT_READY: { label: "Verdict Ready", className: "bg-accent-success/20 text-accent-success" },
+  CHALLENGED: { label: "Challenged", className: "bg-accent-warning/20 text-accent-warning" },
   ESCALATED: { label: "Escalated", className: "bg-accent-danger/20 text-accent-danger" },
   RESOLVED: { label: "Resolved", className: "bg-text-secondary/20 text-text-secondary" },
 };
@@ -39,6 +42,7 @@ export default function AdminDisputeDetailPage() {
   const { dbUser } = useUserStore();
   const [dispute, setDispute] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [analyzing, setAnalyzing] = useState(false);
 
   // Resolution form state
   const [freelancerPercent, setFreelancerPercent] = useState(50);
@@ -67,6 +71,18 @@ export default function AdminDisputeDetailPage() {
     }
     fetchDispute();
   }, [fetchDispute, dbUser, router]);
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true);
+    try {
+      await api.post(`/admin/disputes/${id}/analyze`);
+      await fetchDispute();
+    } catch (error) {
+      console.error("Analysis failed:", error);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   const handleResolve = async () => {
     if (reasoning.length < 10) {
@@ -112,6 +128,7 @@ export default function AdminDisputeDetailPage() {
   const escrowAmount = dispute.contract?.escrowWallet?.heldAmount ?? 0;
   const isResolved = dispute.status === "RESOLVED";
   const canResolve = !isResolved && dispute.status !== "AI_ANALYZING";
+  const canAnalyze = dispute.freelancerStatement && ["OPEN", "EVIDENCE_COLLECTION", "CHALLENGED", "ESCALATED"].includes(dispute.status);
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -148,6 +165,44 @@ export default function AdminDisputeDetailPage() {
           {statusConfig[dispute.status]?.label || dispute.status}
         </Badge>
       </div>
+
+      {/* Challenge Alert — Show when dispute has been challenged */}
+      {dispute.status === "CHALLENGED" && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Card className="glass-elevated p-6 rounded-xl border-2 border-accent-warning/40">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="w-6 h-6 text-accent-warning flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-display font-semibold text-accent-warning mb-1">
+                  Verdict Challenged
+                </h3>
+                <p className="text-text-secondary text-sm mb-3">
+                  A party has challenged the AI verdict. Please re-analyze the dispute or resolve it manually.
+                </p>
+
+                {dispute.challengeReason && (
+                  <div className="p-3 bg-bg-primary rounded-lg border border-border mb-3">
+                    <p className="text-xs text-text-secondary mb-1">Challenge Reason:</p>
+                    <p className="text-sm text-text-primary">&ldquo;{dispute.challengeReason}&rdquo;</p>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-4 text-xs text-text-secondary">
+                  <span>Challenge #{dispute.challengeCount} of 2</span>
+                  {dispute.challengeCount >= 2 && (
+                    <span className="text-accent-danger font-medium">
+                      Max challenges reached — manual resolution recommended
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Contract Info */}
       <Card className="glass-elevated p-6 rounded-xl border-border">
@@ -312,12 +367,69 @@ export default function AdminDisputeDetailPage() {
         )}
       </Card>
 
+      {/* AI Analysis Trigger — Admin Only */}
+      {canAnalyze && !dispute.verdict && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <Card className="glass-elevated p-8 rounded-xl border-border text-center glow-primary">
+            <Brain className="w-12 h-12 text-accent-primary mx-auto mb-4" />
+            <h3 className="font-display text-xl font-bold mb-2">
+              {dispute.status === "CHALLENGED"
+                ? "Re-Analyze After Challenge"
+                : "Run AI Analysis"}
+            </h3>
+            <p className="text-text-secondary mb-6">
+              {dispute.status === "CHALLENGED"
+                ? `The previous verdict was challenged (challenge #${dispute.challengeCount}). Run AI analysis again, considering the challenge feedback.`
+                : "Both parties have submitted their statements. Trigger AI mediation to analyze the dispute and generate a verdict."}
+            </p>
+            {dispute.challengeCount > 0 && dispute.challengeReason && (
+              <div className="p-3 bg-bg-primary rounded-lg border border-border mb-4 text-left max-w-lg mx-auto">
+                <p className="text-xs text-text-secondary mb-1">Latest challenge reason:</p>
+                <p className="text-sm text-text-primary">&ldquo;{dispute.challengeReason}&rdquo;</p>
+              </div>
+            )}
+            <Button
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              size="lg"
+              className="bg-accent-primary hover:bg-accent-primary/90"
+            >
+              {analyzing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Brain className="w-4 h-4 mr-2" />
+                  {dispute.status === "CHALLENGED" ? "Re-Analyze Dispute" : "Run AI Analysis"}
+                </>
+              )}
+            </Button>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* AI Analyzing Status */}
+      {dispute.status === "AI_ANALYZING" && (
+        <Card className="glass-elevated p-8 rounded-xl border-accent-warning/30 text-center">
+          <Brain className="w-10 h-10 text-accent-warning mx-auto mb-3 animate-pulse" />
+          <h3 className="font-display text-lg font-bold mb-1">AI Analysis in Progress</h3>
+          <p className="text-text-secondary text-sm">
+            The AI mediation engine is analyzing all statements and evidence. This may take a moment...
+          </p>
+        </Card>
+      )}
+
       {/* Existing AI Verdict (if any) */}
       {dispute.verdict && (
         <Card className="glass-elevated p-6 rounded-xl border-border">
           <h3 className="font-display font-semibold mb-4 flex items-center gap-2">
             <Scale className="w-4 h-4 text-accent-primary" />
-            AI Verdict (for reference)
+            AI Verdict {dispute.challengeCount > 0 ? `(Re-analysis #${dispute.challengeCount})` : "(for reference)"}
           </h3>
           <div className="space-y-3">
             <div className="grid md:grid-cols-2 gap-4 text-sm">
@@ -344,6 +456,18 @@ export default function AdminDisputeDetailPage() {
                 {dispute.verdict.reasoning}
               </p>
             </div>
+            <div className="p-3 bg-bg-primary rounded-lg border border-border">
+              <p className="text-xs text-text-secondary mb-1">Contract Analysis</p>
+              <p className="text-sm text-text-primary leading-relaxed">
+                {dispute.verdict.contractAnalysis}
+              </p>
+            </div>
+            <div className="p-3 bg-bg-primary rounded-lg border border-border">
+              <p className="text-xs text-text-secondary mb-1">Evidence Summary</p>
+              <p className="text-sm text-text-primary leading-relaxed">
+                {dispute.verdict.evidenceSummary}
+              </p>
+            </div>
             <div className="flex items-center gap-4 text-xs text-text-secondary">
               <span>
                 Confidence:{" "}
@@ -357,7 +481,46 @@ export default function AdminDisputeDetailPage() {
                   {dispute.verdict.modelUsed}
                 </span>
               </span>
+              {dispute.verdict.escalatedToHuman && (
+                <span className="text-accent-danger font-medium">
+                  ⚠ Flagged for human review
+                </span>
+              )}
             </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Challenge History */}
+      {dispute.challengeCount > 0 && (
+        <Card className="glass-elevated p-6 rounded-xl border-border">
+          <h3 className="font-display font-semibold mb-4 flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-accent-warning" />
+            Challenge History
+          </h3>
+          <div className="space-y-3">
+            <div className="p-3 bg-bg-primary rounded-lg border border-border">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-accent-warning">
+                  Challenge #{dispute.challengeCount}
+                </span>
+                <span className="text-xs text-text-secondary">
+                  {dispute.challengeCount} / 2 used
+                </span>
+              </div>
+              {dispute.challengeReason && (
+                <p className="text-sm text-text-primary leading-relaxed">
+                  &ldquo;{dispute.challengeReason}&rdquo;
+                </p>
+              )}
+            </div>
+            {dispute.challengeCount >= 2 && (
+              <div className="p-3 bg-accent-danger/10 rounded-lg border border-accent-danger/20">
+                <p className="text-sm text-accent-danger font-medium">
+                  Maximum challenges reached. Manual resolution is recommended.
+                </p>
+              </div>
+            )}
           </div>
         </Card>
       )}

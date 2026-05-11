@@ -37,6 +37,10 @@ const statusConfig: Record<string, { label: string; className: string }> = {
     label: "Verdict Ready",
     className: "bg-accent-success/20 text-accent-success",
   },
+  CHALLENGED: {
+    label: "Challenged",
+    className: "bg-accent-warning/20 text-accent-warning",
+  },
   ESCALATED: {
     label: "Escalated",
     className: "bg-accent-danger/20 text-accent-danger",
@@ -50,6 +54,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 const filterOptions = [
   { value: "", label: "All" },
   { value: "ESCALATED", label: "Escalated" },
+  { value: "CHALLENGED", label: "Challenged" },
   { value: "OPEN", label: "Open" },
   { value: "EVIDENCE_COLLECTION", label: "Evidence Collection" },
   { value: "AI_ANALYZING", label: "AI Analyzing" },

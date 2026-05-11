@@ -15,6 +15,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   EVIDENCE_COLLECTION: { label: "Collecting Evidence", className: "bg-accent-secondary/20 text-accent-secondary" },
   AI_ANALYZING: { label: "AI Analyzing", className: "bg-accent-warning/20 text-accent-warning animate-pulse" },
   VERDICT_READY: { label: "Verdict Ready", className: "bg-accent-success/20 text-accent-success" },
+  CHALLENGED: { label: "Challenged", className: "bg-accent-warning/20 text-accent-warning" },
   ESCALATED: { label: "Escalated", className: "bg-accent-danger/20 text-accent-danger" },
   RESOLVED: { label: "Resolved", className: "bg-text-secondary/20 text-text-secondary" },
 };

@@ -17,6 +17,7 @@ import milestoneRoutes from "./routes/milestones";
 import disputeRoutes from "./routes/disputes";
 import evidenceRoutes from "./routes/evidence";
 import verdictRoutes from "./routes/verdicts";
+import adminRoutes from "./routes/admin";
 
 const app = express();
 const httpServer = createServer(app);
@@ -55,6 +56,7 @@ app.use("/api/milestones", milestoneRoutes);
 app.use("/api/disputes", disputeRoutes);
 app.use("/api/evidence", evidenceRoutes);
 app.use("/api/verdicts", verdictRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);

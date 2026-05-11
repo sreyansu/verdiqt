@@ -84,28 +84,30 @@ export default function EvidenceUploader({ disputeId, onUpload }: EvidenceUpload
   return (
     <div className="space-y-3">
       {!selectedFile ? (
-        <div
-          {...getRootProps()}
-          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
-            isDragActive
-              ? "border-accent-primary bg-accent-primary/5"
-              : "border-border hover:border-accent-primary/50 hover:bg-bg-primary"
-          }`}
-        >
-          <input {...getInputProps()} />
-          <Upload className="w-8 h-8 text-text-secondary mx-auto mb-3" />
-          <p className="text-sm text-text-secondary">
-            {isDragActive
-              ? "Drop your file here..."
-              : "Drag & drop evidence files, or click to browse"}
-          </p>
-          <p className="text-xs text-text-secondary mt-1">
-            PDF, Images, DOC, TXT — Max 50MB
-          </p>
-        </div>
-        {fileError ? (
-          <p className="text-xs text-red-500 mt-2">{fileError}</p>
-        ) : null}
+        <>
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
+              isDragActive
+                ? "border-accent-primary bg-accent-primary/5"
+                : "border-border hover:border-accent-primary/50 hover:bg-bg-primary"
+            }`}
+          >
+            <input {...getInputProps()} />
+            <Upload className="w-8 h-8 text-text-secondary mx-auto mb-3" />
+            <p className="text-sm text-text-secondary">
+              {isDragActive
+                ? "Drop your file here..."
+                : "Drag & drop evidence files, or click to browse"}
+            </p>
+            <p className="text-xs text-text-secondary mt-1">
+              PDF, Images, DOC, TXT — Max 50MB
+            </p>
+          </div>
+          {fileError ? (
+            <p className="text-xs text-red-500 mt-2">{fileError}</p>
+          ) : null}
+        </>
       ) : (
         <div className="space-y-3">
           <div className="flex items-center gap-3 p-3 bg-bg-primary rounded-lg border border-border">
