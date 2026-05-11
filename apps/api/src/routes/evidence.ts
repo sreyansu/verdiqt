@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma";
 import { cloudinary } from "../lib/cloudinary";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 
-const router = Router();
+const router: any = Router();
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -110,7 +110,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const evidence = await prisma.evidence.findMany({
-        where: { disputeId: req.params.disputeId },
+        where: { disputeId: req.params.disputeId as string },
         include: { uploadedBy: true },
         orderBy: { createdAt: "desc" },
       });
@@ -130,8 +130,8 @@ router.delete(
     try {
       const user = (req as any).dbUser;
 
-      const evidence = await prisma.evidence.findUnique({
-        where: { id: req.params.id },
+      const evidence: any = await prisma.evidence.findUnique({
+        where: { id: req.params.id as string },
         include: { dispute: true },
       });
 
@@ -150,7 +150,7 @@ router.delete(
         return;
       }
 
-      await prisma.evidence.delete({ where: { id: req.params.id } });
+      await prisma.evidence.delete({ where: { id: req.params.id as string } });
 
       res.json({ success: true, message: "Evidence deleted" });
     } catch (error) {

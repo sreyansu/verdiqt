@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { getIO } from "../lib/socket";
 
-const router = Router();
+const router: any = Router();
 
 // GET /api/verdicts/:disputeId — Get verdict for dispute
 router.get(
@@ -12,7 +12,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const verdict = await prisma.verdict.findUnique({
-        where: { disputeId: req.params.disputeId },
+        where: { disputeId: req.params.disputeId as string },
       });
 
       if (!verdict) {
@@ -33,8 +33,8 @@ router.post(
   requireAuthWithUser,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const verdict = await prisma.verdict.findUnique({
-        where: { id: req.params.id },
+      const verdict: any = await prisma.verdict.findUnique({
+        where: { id: req.params.id as string },
         include: {
           dispute: {
             include: {
@@ -88,7 +88,7 @@ router.post(
 
       // Mark verdict as accepted
       await prisma.verdict.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: { acceptedAt: new Date() },
       });
 
@@ -131,7 +131,7 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const verdict = await prisma.verdict.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: { escalatedToHuman: true },
       });
 

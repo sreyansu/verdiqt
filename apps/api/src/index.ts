@@ -19,7 +19,7 @@ import evidenceRoutes from "./routes/evidence";
 import verdictRoutes from "./routes/verdicts";
 import adminRoutes from "./routes/admin";
 
-const app = express();
+const app: any = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 4000;
 
@@ -27,12 +27,22 @@ const PORT = process.env.PORT || 4000;
 initSocket(httpServer);
 
 // Global middleware
+// Build allowed origins list from env
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  process.env.NEXT_PUBLIC_APP_URL,
+].filter(Boolean) as string[];
+
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || origin.startsWith("http://localhost:")) {
+    // Allow requests with no origin (mobile apps, curl, health checks)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.some((allowed) => origin.startsWith(allowed) || origin === allowed)) {
       callback(null, true);
     } else {
-      callback(null, process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");
+      console.warn(`[CORS] Blocked origin: ${origin}`);
+      callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true,
@@ -61,9 +71,10 @@ app.use("/api/admin", adminRoutes);
 // Error handler (must be last)
 app.use(errorHandler);
 
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Verdiqt API running on http://localhost:${PORT}`);
+httpServer.listen(Number(PORT), "0.0.0.0", () => {
+  console.log(`🚀 Verdiqt API running on port ${PORT}`);
   console.log(`📡 Socket.io ready for realtime connections`);
+  console.log(`🌐 Allowed origins: ${allowedOrigins.join(", ")}`);
 });
 
 export default app;

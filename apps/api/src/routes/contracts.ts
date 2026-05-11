@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
 
-const router = Router();
+const router: any = Router();
 
 // Accept any ISO 8601 datetime string (with or without milliseconds/offset)
 const isoDatetime = z.string().refine(
@@ -136,7 +136,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const contract = await prisma.contract.findUnique({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         include: {
           client: true,
           freelancer: true,
@@ -165,7 +165,7 @@ router.put(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const existing = await prisma.contract.findUnique({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
       });
 
       if (!existing) {
@@ -179,7 +179,7 @@ router.put(
       }
 
       const updated = await prisma.contract.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: req.body,
         include: { milestones: true },
       });
@@ -201,7 +201,7 @@ router.patch(
       const user = (req as any).dbUser;
 
       const contract = await prisma.contract.findUnique({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
       });
 
       if (!contract) {
@@ -257,7 +257,7 @@ router.patch(
       }
 
       const updated = await prisma.contract.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: { status },
         include: { milestones: true, escrowWallet: true },
       });

@@ -4,9 +4,15 @@ import { Server as HttpServer } from "http";
 let io: SocketIOServer;
 
 export function initSocket(httpServer: HttpServer) {
+  const origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    process.env.NEXT_PUBLIC_APP_URL,
+  ].filter(Boolean) as string[];
+
   io = new SocketIOServer(httpServer, {
     cors: {
-      origin: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+      origin: origins,
       methods: ["GET", "POST"],
     },
   });

@@ -5,7 +5,7 @@ import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
 import { getIO } from "../lib/socket";
 
-const router = Router();
+const router: any = Router();
 
 const raiseDisputeSchema = z.object({
   contractId: z.string(),
@@ -118,7 +118,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const dispute = await prisma.dispute.findUnique({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         include: {
           contract: {
             include: {
@@ -157,7 +157,7 @@ router.patch(
       const { freelancerStatement } = req.body;
 
       const dispute = await prisma.dispute.findUnique({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         include: { contract: true },
       });
 
@@ -166,13 +166,13 @@ router.patch(
         return;
       }
 
-      if (dispute.contract.freelancerId !== user.id) {
+      if ((dispute as any).contract.freelancerId !== user.id) {
         res.status(403).json({ success: false, error: "Only the freelancer can respond" });
         return;
       }
 
       const updated = await prisma.dispute.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: {
           freelancerStatement,
           status: "EVIDENCE_COLLECTION",
@@ -211,7 +211,7 @@ router.patch(
       }
 
       const dispute = await prisma.dispute.findUnique({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         include: {
           contract: true,
           verdict: true,
@@ -224,8 +224,8 @@ router.patch(
       }
 
       // Only parties to the contract can challenge
-      const isClient = dispute.contract.clientId === user.id;
-      const isFreelancer = dispute.contract.freelancerId === user.id;
+      const isClient = (dispute as any).contract.clientId === user.id;
+      const isFreelancer = (dispute as any).contract.freelancerId === user.id;
       if (!isClient && !isFreelancer) {
         res.status(403).json({
           success: false,
@@ -243,7 +243,7 @@ router.patch(
         return;
       }
 
-      if (!dispute.verdict) {
+      if (!(dispute as any).verdict) {
         res.status(400).json({
           success: false,
           error: "No verdict exists to challenge",
@@ -262,12 +262,12 @@ router.patch(
 
       // Delete old verdict so admin can re-analyze
       await prisma.verdict.delete({
-        where: { id: dispute.verdict.id },
+        where: { id: (dispute as any).verdict.id },
       });
 
       // Update dispute
       const updated = await prisma.dispute.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: {
           status: "CHALLENGED",
           challengeReason,

@@ -6,7 +6,7 @@ import { cloudinary } from "../lib/cloudinary";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
 
-const router = Router();
+const router: any = Router();
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const upload = multer({
@@ -95,8 +95,8 @@ router.patch(
       const { status } = req.body;
       const user = (req as any).dbUser;
 
-      const milestone = await prisma.milestone.findUnique({
-        where: { id: req.params.id },
+      const milestone: any = await prisma.milestone.findUnique({
+        where: { id: req.params.id as string },
         include: { contract: true },
       });
 
@@ -120,7 +120,7 @@ router.patch(
       }
 
       const updated = await prisma.milestone.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: {
           status,
           completedAt: status === "APPROVED" ? new Date() : undefined,
@@ -160,8 +160,8 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
-      const milestone = await prisma.milestone.findUnique({
-        where: { id: req.params.id },
+      const milestone: any = await prisma.milestone.findUnique({
+        where: { id: req.params.id as string },
         include: { contract: true },
       });
 
@@ -232,7 +232,7 @@ router.post(
       }
 
       const updated = await prisma.milestone.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: {
           status: "SUBMITTED",
           submissionNote: submissionNote?.trim() || null,

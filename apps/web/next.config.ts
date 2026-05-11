@@ -1,7 +1,19 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Optimized standalone output for Vercel
+  output: "standalone",
+
+  // Allow Cloudinary images
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        pathname: "/dqltyvave/**",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

@@ -6,7 +6,7 @@ import { validate } from "../middleware/validate";
 import { getIO } from "../lib/socket";
 import { runMediationEngine } from "../services/mediationEngine";
 
-const router = Router();
+const router: any = Router();
 
 // All admin routes require authentication + admin role
 router.use(requireAuthWithUser, requireAdmin);
@@ -81,7 +81,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const dispute = await prisma.dispute.findUnique({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         include: {
           contract: {
             include: {
@@ -133,8 +133,8 @@ router.post(
         return;
       }
 
-      const dispute = await prisma.dispute.findUnique({
-        where: { id: req.params.id },
+      const dispute: any = await prisma.dispute.findUnique({
+        where: { id: req.params.id as string },
         include: {
           contract: { include: { escrowWallet: true } },
           verdict: true,
@@ -222,7 +222,7 @@ router.post(
 
       // Update dispute + contract status
       await prisma.dispute.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: { status: "RESOLVED", resolvedAt: new Date() },
       });
 
@@ -290,8 +290,8 @@ router.post(
   "/disputes/:id/analyze",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const dispute = await prisma.dispute.findUnique({
-        where: { id: req.params.id },
+      const dispute: any = await prisma.dispute.findUnique({
+        where: { id: req.params.id as string },
         include: {
           contract: { include: { milestones: true } },
           evidence: true,
@@ -322,7 +322,7 @@ router.post(
 
       // Update status to analyzing
       await prisma.dispute.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: { status: "AI_ANALYZING" },
       });
 
@@ -377,7 +377,7 @@ router.post(
 
         // Update dispute status
         await prisma.dispute.update({
-          where: { id: req.params.id },
+          where: { id: req.params.id as string },
           data: { status: "VERDICT_READY" },
         });
 
@@ -392,7 +392,7 @@ router.post(
 
         // Fallback to ESCALATED status
         await prisma.dispute.update({
-          where: { id: req.params.id },
+          where: { id: req.params.id as string },
           data: { status: "ESCALATED" },
         });
 

@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma";
 import * as admin from "firebase-admin";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 
-const router = Router();
+const router: any = Router();
 
 // Hardcoded admin credentials
 const ADMIN_EMAIL = "sreyansusekharmohanty@gmail.com";
