@@ -51,7 +51,7 @@ app.use(express.json());
 
 
 // Health check
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", (_req: any, res: any) => {
   res.json({
     status: "ok",
     service: "verdiqt-api",
