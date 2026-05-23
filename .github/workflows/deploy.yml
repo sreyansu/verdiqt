@@ -1,0 +1,108 @@
+name: Deploy to GCP Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }} # Add this to GitHub Secrets
+  REGION: asia-south1 # Update this if you chose a different region
+  API_REPO_NAME: verdiqt-api
+  WEB_REPO_NAME: verdiqt-web
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # Needed for Turbo to detect changes
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker Auth
+        run: |-
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          
+      - name: Install pnpm & turbo
+        run: npm i -g pnpm turbo
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ==========================================
+      # DEPLOY BACKEND (API)
+      # ==========================================
+      - name: Build and Push Backend Image
+        run: |
+          IMAGE_TAG=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.API_REPO_NAME }}/api:${{ github.sha }}
+          docker build -f apps/api/Dockerfile -t $IMAGE_TAG .
+          docker push $IMAGE_TAG
+          echo "API_IMAGE=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Deploy Backend to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: verdiqt-api
+          region: ${{ env.REGION }}
+          image: ${{ env.API_IMAGE }}
+          flags: >-
+            --allow-unauthenticated
+            --session-affinity
+            --concurrency=80
+            --cpu=1
+            --memory=512Mi
+            --port=4000
+            --set-env-vars=NODE_ENV=production
+            --set-env-vars=FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+            --set-env-vars=DATABASE_URL=${{ secrets.DATABASE_URL }}
+            --set-env-vars=CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
+            --set-env-vars=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            --set-env-vars=FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
+            --set-env-vars=FIREBASE_CLIENT_EMAIL=${{ secrets.FIREBASE_CLIENT_EMAIL }}
+            --set-env-vars=FIREBASE_PRIVATE_KEY='${{ secrets.FIREBASE_PRIVATE_KEY }}'
+            --set-env-vars=CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
+            --set-env-vars=CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
+            --set-env-vars=CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}
+
+      # ==========================================
+      # DEPLOY FRONTEND (WEB)
+      # ==========================================
+      - name: Build and Push Frontend Image
+        run: |
+          IMAGE_TAG=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.WEB_REPO_NAME }}/web:${{ github.sha }}
+          docker build -f apps/web/Dockerfile -t $IMAGE_TAG .
+          docker push $IMAGE_TAG
+          echo "WEB_IMAGE=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Deploy Frontend to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: verdiqt-web
+          region: ${{ env.REGION }}
+          image: ${{ env.WEB_IMAGE }}
+          flags: >-
+            --allow-unauthenticated
+            --concurrency=80
+            --cpu=1
+            --memory=512Mi
+            --port=3000
+            --set-env-vars=NODE_ENV=production
+            --set-env-vars=NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL }}
+            --set-env-vars=NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+            --set-env-vars=NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
