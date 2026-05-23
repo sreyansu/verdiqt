@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  PROJECT_ID: ascendant-study-454603-i7 # Hardcoded to your GCP Project ID
+  PROJECT_ID: verdiqt-production # Hardcoded to your GCP Project ID
   REGION: asia-south1 # Update this if you chose a different region
   API_REPO_NAME: verdiqt-api
   WEB_REPO_NAME: verdiqt-web
