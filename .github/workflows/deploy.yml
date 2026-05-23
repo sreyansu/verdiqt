@@ -7,7 +7,7 @@ on:
 
 env:
   PROJECT_ID: verdiqt-production # Hardcoded to your GCP Project ID
-  REGION: asia-south1 # Update this if you chose a different region
+  REGION: asia-southeast1 # Changed to Singapore because Mumbai does not support custom domains
   API_REPO_NAME: verdiqt-api
   WEB_REPO_NAME: verdiqt-web
 
