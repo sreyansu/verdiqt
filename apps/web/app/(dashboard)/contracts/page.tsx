@@ -47,7 +47,7 @@ export default function ContractsPage() {
           <p className="text-text-secondary mt-1 text-sm">Manage your project contracts</p>
         </div>
         {dbUser?.role === "CLIENT" && (
-          <Link href="/contracts/new">
+          <Link href="/contracts/new" className="block sm:inline-block">
             <Button className="bg-accent-primary hover:bg-accent-primary/90 w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               New Contract
