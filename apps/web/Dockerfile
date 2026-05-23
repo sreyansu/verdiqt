@@ -8,7 +8,7 @@ FROM base AS builder
 WORKDIR /app
 RUN npm install -g turbo
 COPY . .
-RUN turbo prune --scope=@verdiqt/web --docker
+RUN turbo prune --scope=web --docker
 
 # Step 2: Install dependencies
 FROM base AS installer
@@ -22,7 +22,7 @@ FROM base AS sourcer
 WORKDIR /app
 COPY --from=installer /app/ .
 COPY --from=builder /app/out/full/ .
-RUN pnpm --filter @verdiqt/web run build
+RUN pnpm --filter web run build
 
 # Step 4: Run the app
 FROM base AS runner
