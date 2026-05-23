@@ -29,6 +29,10 @@ const statusConfig: Record<string, { label: string; className: string }> = {
     label: "Collecting Evidence",
     className: "bg-accent-secondary/20 text-accent-secondary",
   },
+  AWAITING_AI: {
+    label: "Awaiting AI",
+    className: "bg-accent-primary/20 text-accent-primary",
+  },
   AI_ANALYZING: {
     label: "AI Analyzing",
     className: "bg-accent-warning/20 text-accent-warning animate-pulse",
@@ -57,6 +61,7 @@ const filterOptions = [
   { value: "CHALLENGED", label: "Challenged" },
   { value: "OPEN", label: "Open" },
   { value: "EVIDENCE_COLLECTION", label: "Evidence Collection" },
+  { value: "AWAITING_AI", label: "Awaiting AI" },
   { value: "AI_ANALYZING", label: "AI Analyzing" },
   { value: "VERDICT_READY", label: "Verdict Ready" },
   { value: "RESOLVED", label: "Resolved" },

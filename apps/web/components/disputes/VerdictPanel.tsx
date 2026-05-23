@@ -234,6 +234,28 @@ export default function VerdictPanel({
                 {verdict.evidenceSummary}
               </p>
             </div>
+
+            {verdict.legalBasis && (
+              <div>
+                <h4 className="text-sm font-medium text-text-secondary mb-2 flex items-center gap-2">
+                  <Scale className="w-4 h-4" /> Legal Provisions Applied
+                </h4>
+                <p className="text-sm text-text-primary leading-relaxed bg-gradient-to-r from-accent-primary/5 to-accent-secondary/5 rounded-lg p-4 border border-accent-primary/20">
+                  {verdict.legalBasis}
+                </p>
+              </div>
+            )}
+
+            {verdict.escalatedToHuman && verdict.escalationReason && verdict.escalationReason !== "N/A" && (
+              <div>
+                <h4 className="text-sm font-medium text-accent-danger mb-2 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> Escalation Reason
+                </h4>
+                <p className="text-sm text-text-primary leading-relaxed bg-accent-danger/5 rounded-lg p-4 border border-accent-danger/20">
+                  {verdict.escalationReason}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Model info */}

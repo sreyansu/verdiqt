@@ -19,6 +19,7 @@ import {
   Loader2,
   ShieldAlert,
   Gavel,
+  Send,
 } from "lucide-react";
 import { useAuthenticatedApi } from "@/lib/useAuthenticatedApi";
 import { useDisputeRealtime } from "@/hooks/useRealtime";
@@ -31,6 +32,7 @@ import EvidenceUploader from "@/components/disputes/EvidenceUploader";
 const stageConfig: Record<string, { icon: any; color: string; label: string }> = {
   OPEN: { icon: Clock, color: "text-accent-primary", label: "Open" },
   EVIDENCE_COLLECTION: { icon: Upload, color: "text-accent-secondary", label: "Evidence Collection" },
+  AWAITING_AI: { icon: Send, color: "text-accent-primary", label: "Awaiting AI" },
   AI_ANALYZING: { icon: Brain, color: "text-accent-warning", label: "AI Analyzing" },
   VERDICT_READY: { icon: CheckCircle2, color: "text-accent-success", label: "Verdict Ready" },
   CHALLENGED: { icon: ShieldAlert, color: "text-accent-warning", label: "Challenged" },
@@ -38,7 +40,7 @@ const stageConfig: Record<string, { icon: any; color: string; label: string }> =
   RESOLVED: { icon: Scale, color: "text-text-secondary", label: "Resolved" },
 };
 
-const stages = ["OPEN", "EVIDENCE_COLLECTION", "AI_ANALYZING", "VERDICT_READY", "RESOLVED"];
+const stages = ["OPEN", "EVIDENCE_COLLECTION", "AWAITING_AI", "AI_ANALYZING", "VERDICT_READY", "RESOLVED"];
 
 export default function DisputeDetailPage() {
   const { id } = useParams();
@@ -49,6 +51,7 @@ export default function DisputeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [respondText, setRespondText] = useState("");
   const [responding, setResponding] = useState(false);
+  const [markingReady, setMarkingReady] = useState(false);
 
   const fetchDispute = useCallback(async () => {
     try {
@@ -68,7 +71,7 @@ export default function DisputeDetailPage() {
   // Realtime status updates
   useDisputeRealtime(id as string, (newStatus) => {
     setDispute((prev: any) => (prev ? { ...prev, status: newStatus } : prev));
-    if (["VERDICT_READY", "RESOLVED", "CHALLENGED", "ESCALATED"].includes(newStatus)) {
+    if (["VERDICT_READY", "RESOLVED", "CHALLENGED", "ESCALATED", "AWAITING_AI"].includes(newStatus)) {
       fetchDispute(); // Refetch to get updated data
     }
   });
@@ -77,7 +80,7 @@ export default function DisputeDetailPage() {
     setResponding(true);
     try {
       await api.patch(`/disputes/${id}/respond`, {
-        freelancerStatement: respondText,
+        statement: respondText,
       });
       await fetchDispute();
       setRespondText("");
@@ -85,6 +88,18 @@ export default function DisputeDetailPage() {
       console.error("Response failed:", error);
     } finally {
       setResponding(false);
+    }
+  };
+
+  const handleMarkReady = async () => {
+    setMarkingReady(true);
+    try {
+      await api.patch(`/disputes/${id}/ready`);
+      await fetchDispute();
+    } catch (error) {
+      console.error("Failed to mark ready:", error);
+    } finally {
+      setMarkingReady(false);
     }
   };
 
@@ -106,7 +121,14 @@ export default function DisputeDetailPage() {
 
   const currentStageIndex = stages.indexOf(dispute.status);
   const isFreelancer = dispute.contract?.freelancerId === dbUser?.id;
-  const canRespond = isFreelancer && !dispute.freelancerStatement && dispute.status === "OPEN";
+  const isClient = dispute.contract?.clientId === dbUser?.id;
+  
+  const canRespond = dispute.status === "OPEN" && (
+    (isClient && !dispute.clientStatement) ||
+    (isFreelancer && !dispute.freelancerStatement)
+  );
+  const myReadyStatus = isClient ? dispute.clientReady : dispute.freelancerReady;
+  const otherReadyStatus = isClient ? dispute.freelancerReady : dispute.clientReady;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -238,34 +260,22 @@ export default function DisputeDetailPage() {
 
       {/* Statements */}
       <div className="grid lg:grid-cols-2 gap-4">
+        {/* Client Statement Card */}
         <Card className="glass-elevated p-6 rounded-xl border-border">
           <div className="flex items-center gap-2 mb-3">
             <User className="w-4 h-4 text-accent-primary" />
             <h3 className="font-display font-semibold">Client&apos;s Statement</h3>
           </div>
-          <p className="text-text-secondary text-sm leading-relaxed">
-            &ldquo;{dispute.clientStatement}&rdquo;
-          </p>
-          <p className="text-xs text-text-secondary mt-3">
-            — {dispute.contract?.client?.name}
-          </p>
-        </Card>
-
-        <Card className="glass-elevated p-6 rounded-xl border-border">
-          <div className="flex items-center gap-2 mb-3">
-            <User className="w-4 h-4 text-accent-secondary" />
-            <h3 className="font-display font-semibold">Freelancer&apos;s Response</h3>
-          </div>
-          {dispute.freelancerStatement ? (
+          {dispute.clientStatement ? (
             <>
               <p className="text-text-secondary text-sm leading-relaxed">
-                &ldquo;{dispute.freelancerStatement}&rdquo;
+                &ldquo;{dispute.clientStatement}&rdquo;
               </p>
               <p className="text-xs text-text-secondary mt-3">
-                — {dispute.contract?.freelancer?.name}
+                — {dispute.contract?.client?.name}
               </p>
             </>
-          ) : canRespond ? (
+          ) : canRespond && isClient ? (
             <div className="space-y-3">
               <textarea
                 value={respondText}
@@ -276,15 +286,54 @@ export default function DisputeDetailPage() {
               <Button
                 onClick={handleRespond}
                 disabled={respondText.length < 20 || responding}
-                className="bg-accent-secondary hover:bg-accent-secondary/90"
+                className="bg-accent-primary hover:bg-accent-primary/90 text-white"
               >
                 {responding ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                Submit Response
+                Submit Statement
               </Button>
             </div>
           ) : (
             <p className="text-text-secondary text-sm italic">
-              Awaiting freelancer&apos;s response...
+              No statement submitted.
+            </p>
+          )}
+        </Card>
+
+        {/* Freelancer Statement Card */}
+        <Card className="glass-elevated p-6 rounded-xl border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <User className="w-4 h-4 text-accent-secondary" />
+            <h3 className="font-display font-semibold">Freelancer&apos;s Statement</h3>
+          </div>
+          {dispute.freelancerStatement ? (
+            <>
+              <p className="text-text-secondary text-sm leading-relaxed">
+                &ldquo;{dispute.freelancerStatement}&rdquo;
+              </p>
+              <p className="text-xs text-text-secondary mt-3">
+                — {dispute.contract?.freelancer?.name}
+              </p>
+            </>
+          ) : canRespond && isFreelancer ? (
+            <div className="space-y-3">
+              <textarea
+                value={respondText}
+                onChange={(e) => setRespondText(e.target.value)}
+                placeholder="Write your response to this dispute..."
+                className="w-full h-32 bg-bg-primary border border-border rounded-lg p-3 text-sm text-text-primary placeholder:text-text-secondary resize-none focus:border-accent-primary focus:outline-none"
+              />
+              <Button
+                onClick={handleRespond}
+                disabled={respondText.length < 20 || responding}
+                className="bg-accent-secondary hover:bg-accent-secondary/90 text-white"
+              >
+                {responding ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Submit Statement
+              </Button>
+            </div>
+          ) : (
+            <p className="text-text-secondary text-sm italic">
+              No statement submitted.
             </p>
           )}
         </Card>
@@ -331,7 +380,7 @@ export default function DisputeDetailPage() {
         )}
       </Card>
 
-      {/* Waiting for Admin — shown when both statements submitted but no verdict yet */}
+      {/* Ready for Review / Awaiting AI Section */}
       {dispute.freelancerStatement &&
         !dispute.verdict &&
         ["OPEN", "EVIDENCE_COLLECTION"].includes(dispute.status) && (
@@ -339,13 +388,99 @@ export default function DisputeDetailPage() {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
         >
-          <Card className="glass-elevated p-8 rounded-xl border-border text-center">
-            <Clock className="w-10 h-10 text-accent-primary mx-auto mb-3" />
-            <h3 className="font-display text-lg font-bold mb-2">
-              Awaiting Admin Review
-            </h3>
+          <Card className="glass-elevated p-8 rounded-xl border-border">
+            <div className="text-center mb-6">
+              <Send className="w-10 h-10 text-accent-primary mx-auto mb-3" />
+              <h3 className="font-display text-lg font-bold mb-2">
+                Ready for AI Arbitration?
+              </h3>
+              <p className="text-text-secondary text-sm max-w-lg mx-auto">
+                Once both parties mark &ldquo;Ready for Review&rdquo;, the dispute will be sent to the platform administrator who will trigger AI arbitration analysis.
+              </p>
+            </div>
+
+            {/* Readiness Status */}
+            <div className="flex justify-center gap-6 mb-6">
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
+                dispute.clientReady
+                  ? "border-accent-success/30 bg-accent-success/10"
+                  : "border-border bg-bg-primary"
+              }`}>
+                {dispute.clientReady ? (
+                  <CheckCircle2 className="w-4 h-4 text-accent-success" />
+                ) : (
+                  <Clock className="w-4 h-4 text-text-secondary" />
+                )}
+                <span className={`text-sm font-medium ${
+                  dispute.clientReady ? "text-accent-success" : "text-text-secondary"
+                }`}>
+                  Client {dispute.clientReady ? "Ready" : "Pending"}
+                </span>
+              </div>
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
+                dispute.freelancerReady
+                  ? "border-accent-success/30 bg-accent-success/10"
+                  : "border-border bg-bg-primary"
+              }`}>
+                {dispute.freelancerReady ? (
+                  <CheckCircle2 className="w-4 h-4 text-accent-success" />
+                ) : (
+                  <Clock className="w-4 h-4 text-text-secondary" />
+                )}
+                <span className={`text-sm font-medium ${
+                  dispute.freelancerReady ? "text-accent-success" : "text-text-secondary"
+                }`}>
+                  Freelancer {dispute.freelancerReady ? "Ready" : "Pending"}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Button */}
+            {(isClient || isFreelancer) && !myReadyStatus && (
+              <div className="text-center">
+                <Button
+                  onClick={handleMarkReady}
+                  disabled={markingReady}
+                  className="bg-accent-primary hover:bg-accent-primary/90"
+                >
+                  {markingReady ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                  )}
+                  Mark Ready for Review
+                </Button>
+                <p className="text-xs text-text-secondary mt-2">
+                  Make sure you&apos;ve uploaded all your evidence before marking ready.
+                </p>
+              </div>
+            )}
+
+            {myReadyStatus && !otherReadyStatus && (
+              <div className="text-center">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-success/10 border border-accent-success/20">
+                  <CheckCircle2 className="w-4 h-4 text-accent-success" />
+                  <span className="text-sm text-accent-success font-medium">
+                    You&apos;re ready! Waiting for the other party...
+                  </span>
+                </div>
+              </div>
+            )}
+          </Card>
+        </motion.div>
+      )}
+
+      {/* AWAITING_AI Status Banner */}
+      {dispute.status === "AWAITING_AI" && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Card className="glass-elevated p-6 rounded-xl border-accent-primary/30 text-center">
+            <Send className="w-10 h-10 text-accent-primary mx-auto mb-3" />
+            <h3 className="font-display text-lg font-bold mb-1">Ready for AI Analysis</h3>
             <p className="text-text-secondary text-sm">
-              Both parties have submitted their statements. A platform administrator will initiate AI analysis and review of this dispute. You will be notified when a verdict is ready.
+              Both parties have marked ready. The platform administrator will now review and initiate AI arbitration analysis. You will be notified when a verdict is ready.
             </p>
           </Card>
         </motion.div>

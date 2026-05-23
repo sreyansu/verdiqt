@@ -73,12 +73,28 @@ export default function AdminPage() {
       borderColor: "border-accent-danger/20",
     },
     {
-      label: "Open Disputes",
-      value: stats?.openDisputes ?? 0,
-      icon: Clock,
+      label: "Challenged",
+      value: stats?.challenged ?? 0,
+      icon: Shield,
       color: "text-accent-warning",
       bgColor: "bg-accent-warning/10",
       borderColor: "border-accent-warning/20",
+    },
+    {
+      label: "Awaiting AI",
+      value: stats?.awaitingAI ?? 0,
+      icon: Loader2,
+      color: "text-accent-primary",
+      bgColor: "bg-accent-primary/10",
+      borderColor: "border-accent-primary/20",
+    },
+    {
+      label: "Open Disputes",
+      value: stats?.openDisputes ?? 0,
+      icon: Clock,
+      color: "text-text-primary",
+      bgColor: "bg-bg-elevated",
+      borderColor: "border-border",
     },
     {
       label: "Resolved",
@@ -92,9 +108,9 @@ export default function AdminPage() {
       label: "Total Disputes",
       value: stats?.totalDisputes ?? 0,
       icon: Scale,
-      color: "text-accent-primary",
-      bgColor: "bg-accent-primary/10",
-      borderColor: "border-accent-primary/20",
+      color: "text-text-secondary",
+      bgColor: "bg-bg-elevated",
+      borderColor: "border-border",
     },
   ];
 
@@ -116,7 +132,7 @@ export default function AdminPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {statCards.map((stat, i) => (
           <motion.div
             key={stat.label}

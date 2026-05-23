@@ -54,7 +54,7 @@ export default function NewDisputePage() {
       const { data } = await api.post("/disputes", {
         contractId: selectedContract,
         title,
-        clientStatement: statement,
+        statement,
       });
       router.push(`/disputes/${data.data.id}`);
     } catch (error: any) {

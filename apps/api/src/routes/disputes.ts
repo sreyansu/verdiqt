@@ -10,11 +10,11 @@ const router: any = Router();
 const raiseDisputeSchema = z.object({
   contractId: z.string(),
   title: z.string().min(5).max(200),
-  clientStatement: z.string().min(20),
+  statement: z.string().min(20),
 });
 
 const respondDisputeSchema = z.object({
-  freelancerStatement: z.string().min(20),
+  statement: z.string().min(20),
 });
 
 // GET /api/disputes — List disputes for user
@@ -54,7 +54,7 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
-      const { contractId, title, clientStatement } = req.body;
+      const { contractId, title, statement } = req.body;
 
       // Check contract exists and is active
       const contract = await prisma.contract.findUnique({
@@ -77,13 +77,16 @@ router.post(
         return;
       }
 
+      const isClient = contract.clientId === user.id;
+
       // Create dispute + freeze escrow + update contract status
       const dispute = await prisma.dispute.create({
         data: {
           contractId,
           raisedById: user.id,
           title,
-          clientStatement,
+          clientStatement: isClient ? statement : null,
+          freelancerStatement: !isClient ? statement : null,
           status: "OPEN",
         },
         include: {
@@ -154,7 +157,7 @@ router.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
-      const { freelancerStatement } = req.body;
+      const { statement } = req.body;
 
       const dispute = await prisma.dispute.findUnique({
         where: { id: req.params.id as string },
@@ -166,15 +169,25 @@ router.patch(
         return;
       }
 
-      if ((dispute as any).contract.freelancerId !== user.id) {
-        res.status(403).json({ success: false, error: "Only the freelancer can respond" });
+      const contract = (dispute as any).contract;
+      const isClient = contract.clientId === user.id;
+      const isFreelancer = contract.freelancerId === user.id;
+
+      if (!isClient && !isFreelancer) {
+        res.status(403).json({ success: false, error: "Only contract parties can respond" });
+        return;
+      }
+
+      // Prevent the party who raised the dispute from responding to it
+      if (dispute.raisedById === user.id) {
+        res.status(400).json({ success: false, error: "You cannot respond to your own dispute" });
         return;
       }
 
       const updated = await prisma.dispute.update({
         where: { id: req.params.id as string },
         data: {
-          freelancerStatement,
+          ...(isClient ? { clientStatement: statement } : { freelancerStatement: statement }),
           status: "EVIDENCE_COLLECTION",
         },
       });
@@ -284,6 +297,106 @@ router.patch(
       });
 
       res.json({ success: true, data: updated });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// PATCH /api/disputes/:id/ready — User marks themselves as "ready for review"
+router.patch(
+  "/:id/ready",
+  requireAuthWithUser,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).dbUser;
+
+      const dispute = await prisma.dispute.findUnique({
+        where: { id: req.params.id as string },
+        include: { contract: true },
+      });
+
+      if (!dispute) {
+        res.status(404).json({ success: false, error: "Dispute not found" });
+        return;
+      }
+
+      // Only parties to the contract can mark ready
+      const isClient = (dispute as any).contract.clientId === user.id;
+      const isFreelancer = (dispute as any).contract.freelancerId === user.id;
+      if (!isClient && !isFreelancer) {
+        res.status(403).json({
+          success: false,
+          error: "Only parties to this dispute can mark ready",
+        });
+        return;
+      }
+
+      // Can only mark ready during evidence collection or open (after both statements)
+      if (!["OPEN", "EVIDENCE_COLLECTION"].includes(dispute.status)) {
+        res.status(400).json({
+          success: false,
+          error: "Can only mark ready during evidence collection phase",
+        });
+        return;
+      }
+
+      // Both statements must exist before marking ready
+      if (!dispute.freelancerStatement) {
+        res.status(400).json({
+          success: false,
+          error: "Both parties must submit statements before marking ready",
+        });
+        return;
+      }
+
+      // Set the appropriate ready flag
+      const updateData: any = {};
+      if (isClient) updateData.clientReady = true;
+      if (isFreelancer) updateData.freelancerReady = true;
+
+      // Check if the other party is already ready
+      const otherReady = isClient ? dispute.freelancerReady : dispute.clientReady;
+
+      // If both are now ready, transition to AWAITING_AI
+      if (otherReady) {
+        updateData.status = "AWAITING_AI";
+      }
+
+      const updated = await prisma.dispute.update({
+        where: { id: req.params.id as string },
+        data: updateData,
+      });
+
+      // Emit realtime update
+      const io = getIO();
+      if (otherReady) {
+        // Both ready — notify everyone including admin
+        io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
+          disputeId: dispute.id,
+          status: "AWAITING_AI",
+        });
+        io.emit("adminNotification", {
+          type: "DISPUTE_READY_FOR_AI",
+          disputeId: dispute.id,
+          message: `Dispute "${dispute.title}" is ready for AI analysis — both parties have submitted evidence.`,
+        });
+      } else {
+        // One party ready — notify the dispute room
+        io.to(`dispute:${dispute.id}`).emit("disputeReadyUpdate", {
+          disputeId: dispute.id,
+          clientReady: isClient ? true : dispute.clientReady,
+          freelancerReady: isFreelancer ? true : dispute.freelancerReady,
+        });
+      }
+
+      res.json({
+        success: true,
+        data: updated,
+        message: otherReady
+          ? "Both parties ready — dispute sent for AI analysis review."
+          : `You've marked ready. Waiting for the other party.`,
+      });
     } catch (error) {
       next(error);
     }

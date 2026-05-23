@@ -81,9 +81,11 @@ model Dispute {
   contractId          String    @unique @db.ObjectId
   raisedById          String    @db.ObjectId
   title               String
-  clientStatement     String
+  clientStatement     String?
   freelancerStatement String?
   status              String    @default("OPEN")
+  clientReady         Boolean   @default(false)
+  freelancerReady     Boolean   @default(false)
   challengeReason     String?
   challengedById      String?   @db.ObjectId
   challengeCount      Int       @default(0)
@@ -123,6 +125,8 @@ model Verdict {
   confidenceScore          Float
   escalatedToHuman         Boolean   @default(false)
   modelUsed                String
+  legalBasis               String?
+  escalationReason         String?
   createdAt                DateTime  @default(now())
   acceptedAt               DateTime?
 

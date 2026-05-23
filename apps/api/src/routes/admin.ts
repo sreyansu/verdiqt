@@ -16,7 +16,7 @@ router.get(
   "/stats",
   async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      const [totalDisputes, escalated, openDisputes, resolved] =
+      const [totalDisputes, escalated, openDisputes, resolved, awaitingAI, challenged] =
         await Promise.all([
           prisma.dispute.count(),
           prisma.dispute.count({ where: { status: "ESCALATED" } }),
@@ -26,11 +26,13 @@ router.get(
             },
           }),
           prisma.dispute.count({ where: { status: "RESOLVED" } }),
+          prisma.dispute.count({ where: { status: "AWAITING_AI" } }),
+          prisma.dispute.count({ where: { status: "CHALLENGED" } }),
         ]);
 
       res.json({
         success: true,
-        data: { totalDisputes, escalated, openDisputes, resolved },
+        data: { totalDisputes, escalated, openDisputes, resolved, awaitingAI, challenged },
       });
     } catch (error) {
       next(error);
@@ -341,37 +343,40 @@ router.post(
       }
 
       // Build challenge context if re-analyzing after a challenge
-      const challengeContext = dispute.challengeCount > 0 && dispute.challengeReason
-        ? `\n\n## CHALLENGE CONTEXT\nThis dispute has been challenged ${dispute.challengeCount} time(s).\nLatest challenge reason: "${dispute.challengeReason}"\nPlease carefully re-evaluate considering this challenge.`
-        : "";
+      const challengeCtx = dispute.challengeCount > 0 && dispute.challengeReason
+        ? { reason: dispute.challengeReason, count: dispute.challengeCount }
+        : undefined;
 
       // Run AI mediation
       try {
-        const verdict = await runMediationEngine({
-          contractTitle: dispute.contract.title,
-          contractDescription: dispute.contract.description,
-          totalAmount: dispute.contract.totalAmount,
-          milestones: dispute.contract.milestones.map((m: any) => ({
-            title: m.title,
-            description: m.description,
-            amount: m.amount,
-            status: m.status,
-            dueDate: m.dueDate.toISOString(),
-          })),
-          clientStatement: dispute.clientStatement,
-          freelancerStatement: dispute.freelancerStatement,
-          evidenceSummaries: dispute.evidence.map(
-            (e: any) => `${e.fileName} (${e.fileType}): ${e.description || "No description"}`
-          ),
-          disputeTitle: dispute.title + challengeContext,
-        });
+        const verdict = await runMediationEngine(
+          {
+            contractTitle: dispute.contract.title,
+            contractDescription: dispute.contract.description,
+            totalAmount: dispute.contract.totalAmount,
+            milestones: dispute.contract.milestones.map((m: any) => ({
+              title: m.title,
+              description: m.description,
+              amount: m.amount,
+              status: m.status,
+              dueDate: m.dueDate.toISOString(),
+            })),
+            clientStatement: dispute.clientStatement,
+            freelancerStatement: dispute.freelancerStatement,
+            evidenceSummaries: dispute.evidence.map(
+              (e: any) => `${e.fileName} (${e.fileType}): ${e.description || "No description"}`
+            ),
+            disputeTitle: dispute.title,
+          },
+          challengeCtx
+        );
 
         // Save verdict
         const savedVerdict = await prisma.verdict.create({
           data: {
             disputeId: dispute.id,
             ...verdict,
-            modelUsed: process.env.NODE_ENV === "production" ? "claude-3-7-sonnet-20250219" : "claude-3-5-haiku-20241022",
+            modelUsed: "gemini-2.5-flash",
           },
         });
 

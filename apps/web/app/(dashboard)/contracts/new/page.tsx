@@ -109,8 +109,14 @@ export default function NewContractPage() {
       });
       router.push("/contracts");
     } catch (error: any) {
-      console.error("Failed to create contract:", error);
-      alert(error.response?.data?.error || "Failed to create contract");
+      console.error("Failed to create contract:", error.response?.data || error);
+      const data = error.response?.data;
+      if (data?.details && Array.isArray(data.details)) {
+        const issues = data.details.map((d: any) => `${d.field}: ${d.message}`).join("\n");
+        alert(`Validation failed:\n${issues}`);
+      } else {
+        alert(data?.error || "Failed to create contract");
+      }
     } finally {
       setSubmitting(false);
     }

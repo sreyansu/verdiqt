@@ -28,6 +28,7 @@ import { format } from "date-fns";
 const statusConfig: Record<string, { label: string; className: string }> = {
   OPEN: { label: "Open", className: "bg-accent-primary/20 text-accent-primary" },
   EVIDENCE_COLLECTION: { label: "Collecting Evidence", className: "bg-accent-secondary/20 text-accent-secondary" },
+  AWAITING_AI: { label: "Awaiting AI", className: "bg-accent-primary/20 text-accent-primary" },
   AI_ANALYZING: { label: "AI Analyzing", className: "bg-accent-warning/20 text-accent-warning" },
   VERDICT_READY: { label: "Verdict Ready", className: "bg-accent-success/20 text-accent-success" },
   CHALLENGED: { label: "Challenged", className: "bg-accent-warning/20 text-accent-warning" },
@@ -128,7 +129,7 @@ export default function AdminDisputeDetailPage() {
   const escrowAmount = dispute.contract?.escrowWallet?.heldAmount ?? 0;
   const isResolved = dispute.status === "RESOLVED";
   const canResolve = !isResolved && dispute.status !== "AI_ANALYZING";
-  const canAnalyze = dispute.freelancerStatement && ["OPEN", "EVIDENCE_COLLECTION", "CHALLENGED", "ESCALATED"].includes(dispute.status);
+  const canAnalyze = dispute.freelancerStatement && ["OPEN", "EVIDENCE_COLLECTION", "AWAITING_AI", "CHALLENGED", "ESCALATED"].includes(dispute.status);
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -231,19 +232,42 @@ export default function AdminDisputeDetailPage() {
               {dispute.contract?.freelancer?.email}
             </p>
           </div>
-          <div>
-            <p className="text-xs text-text-secondary">Contract Value</p>
-            <p className="text-sm font-medium flex items-center gap-1 mt-1">
-              <IndianRupee className="w-3.5 h-3.5" />₹
-              {dispute.contract?.totalAmount?.toLocaleString("en-IN")}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-text-secondary">Escrow Held</p>
-            <p className="text-sm font-medium flex items-center gap-1 mt-1">
-              <IndianRupee className="w-3.5 h-3.5 text-accent-warning" />₹
-              {escrowAmount.toLocaleString("en-IN")}
-            </p>
+          <div className="col-span-2 md:col-span-4 lg:col-span-2 grid grid-cols-2 gap-4 mt-2 lg:mt-0 border-t lg:border-t-0 lg:border-l border-border pt-4 lg:pt-0 lg:pl-4">
+            <div>
+              <p className="text-xs text-text-secondary">Readiness Status</p>
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center gap-2">
+                  {dispute.clientReady ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-accent-success" />
+                  ) : (
+                    <Clock className="w-3.5 h-3.5 text-text-secondary" />
+                  )}
+                  <span className={`text-xs ${dispute.clientReady ? "text-accent-success" : "text-text-secondary"}`}>
+                    Client: {dispute.clientReady ? "Ready" : "Pending"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {dispute.freelancerReady ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-accent-success" />
+                  ) : (
+                    <Clock className="w-3.5 h-3.5 text-text-secondary" />
+                  )}
+                  <span className={`text-xs ${dispute.freelancerReady ? "text-accent-success" : "text-text-secondary"}`}>
+                    Freelancer: {dispute.freelancerReady ? "Ready" : "Pending"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs text-text-secondary">Escrow Held</p>
+              <p className="text-sm font-medium flex items-center gap-1 mt-1">
+                <IndianRupee className="w-3.5 h-3.5 text-accent-warning" />₹
+                {escrowAmount.toLocaleString("en-IN")}
+              </p>
+              <p className="text-xs text-text-secondary mt-1">
+                Total: ₹{dispute.contract?.totalAmount?.toLocaleString("en-IN")}
+              </p>
+            </div>
           </div>
         </div>
       </Card>
@@ -468,6 +492,26 @@ export default function AdminDisputeDetailPage() {
                 {dispute.verdict.evidenceSummary}
               </p>
             </div>
+            {dispute.verdict.legalBasis && (
+              <div className="p-3 bg-gradient-to-r from-accent-primary/5 to-accent-secondary/5 rounded-lg border border-accent-primary/20">
+                <p className="text-xs text-accent-primary font-medium mb-1 flex items-center gap-1">
+                  <Scale className="w-3.5 h-3.5" /> Legal Provisions Applied
+                </p>
+                <p className="text-sm text-text-primary leading-relaxed">
+                  {dispute.verdict.legalBasis}
+                </p>
+              </div>
+            )}
+            {dispute.verdict.escalatedToHuman && dispute.verdict.escalationReason && dispute.verdict.escalationReason !== "N/A" && (
+              <div className="p-3 bg-accent-danger/5 rounded-lg border border-accent-danger/20">
+                <p className="text-xs text-accent-danger font-medium mb-1 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" /> Escalation Reason
+                </p>
+                <p className="text-sm text-text-primary leading-relaxed">
+                  {dispute.verdict.escalationReason}
+                </p>
+              </div>
+            )}
             <div className="flex items-center gap-4 text-xs text-text-secondary">
               <span>
                 Confidence:{" "}
