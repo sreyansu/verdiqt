@@ -33,7 +33,7 @@ const allowedOrigins = [
   "http://localhost:3001",
   process.env.NEXT_PUBLIC_APP_URL,
   process.env.FRONTEND_URL,
-].filter(Boolean).map(url => url.replace(/\/$/, "")) as string[];
+].filter(Boolean).map(url => String(url).replace(/\/$/, "")) as string[];
 
 app.use(cors({
   origin: function (origin, callback) {
