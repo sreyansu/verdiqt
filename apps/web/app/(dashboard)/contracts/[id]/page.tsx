@@ -314,7 +314,7 @@ export default function ContractDetailPage() {
         </div>
 
       {/* Info grid */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="glass-elevated p-4 rounded-xl border-border">
           <IndianRupee className="w-4 h-4 text-text-secondary mb-1" />
           <p className="font-mono font-bold text-lg">₹{contract.totalAmount.toLocaleString("en-IN")}</p>
@@ -382,7 +382,7 @@ export default function ContractDetailPage() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.1 }}
-                className="flex items-center gap-4 p-4 bg-bg-primary rounded-lg border border-border"
+                className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 bg-bg-primary rounded-lg border border-border"
               >
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                   m.status === "APPROVED" ? "bg-accent-success" : "bg-bg-elevated border border-border"
@@ -429,7 +429,7 @@ export default function ContractDetailPage() {
 
                 {/* Milestone Interaction UI (Phase 3) */}
                 {contract.status === "ACTIVE" && (
-                  <div className="flex gap-2 ml-4 pl-4 border-l border-border">
+                  <div className="flex gap-2 sm:ml-4 sm:pl-4 sm:border-l border-border mt-3 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-t-0">
                     {/* Freelancer Action: Submit Work */}
                     {!isClient && (m.status === "PENDING" || m.status === "REJECTED") && (
                       <Dialog open={submitWorkDialogOpen} onOpenChange={(open) => {

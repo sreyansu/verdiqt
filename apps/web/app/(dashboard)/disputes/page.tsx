@@ -41,13 +41,13 @@ export default function DisputesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold">Disputes</h1>
-          <p className="text-text-secondary mt-1">Track and manage your disputes</p>
+          <h1 className="font-display text-xl sm:text-2xl font-bold">Disputes</h1>
+          <p className="text-text-secondary mt-1 text-sm">Track and manage your disputes</p>
         </div>
         <Link href="/disputes/new">
-          <Button className="bg-accent-warning hover:bg-accent-warning/90 text-bg-primary">
+          <Button className="bg-accent-warning hover:bg-accent-warning/90 text-bg-primary w-full sm:w-auto">
             <Plus className="w-4 h-4 mr-2" />
             Raise Dispute
           </Button>
@@ -84,8 +84,8 @@ export default function DisputesPage() {
                   <Card className="glass-elevated p-6 rounded-xl border-border hover:border-accent-warning/20 transition-all duration-200 cursor-pointer group">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-display font-semibold text-lg truncate">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                          <h3 className="font-display font-semibold text-base sm:text-lg truncate">
                             {dispute.title}
                           </h3>
                           <Badge className={status.className}>{status.label}</Badge>
@@ -93,7 +93,7 @@ export default function DisputesPage() {
                         <p className="text-text-secondary text-sm mb-3">
                           Contract: {dispute.contract?.title}
                         </p>
-                        <div className="flex items-center gap-4 text-sm text-text-secondary">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-secondary">
                           <span className="flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" />
                             {formatDistanceToNow(new Date(dispute.createdAt), { addSuffix: true })}

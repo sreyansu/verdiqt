@@ -132,8 +132,8 @@ export default function NewContractPage() {
         <ArrowLeft className="w-4 h-4 mr-2" /> Back
       </Button>
 
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-bold">Create New Contract</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h1 className="font-display text-xl sm:text-2xl font-bold">Create New Contract</h1>
         <Button
           variant="outline"
           size="sm"
@@ -208,7 +208,7 @@ export default function NewContractPage() {
                   className="bg-bg-primary border-border min-h-[100px]"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Total Amount (₹)</Label>
                   <Input
@@ -230,7 +230,7 @@ export default function NewContractPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Start Date</Label>
                   <Input
@@ -297,7 +297,7 @@ export default function NewContractPage() {
                   placeholder="Description of deliverables..."
                   className="bg-bg-primary border-border min-h-[60px]"
                 />
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid sm:grid-cols-2 gap-3">
                   <Input
                     type="number"
                     value={m.amount}

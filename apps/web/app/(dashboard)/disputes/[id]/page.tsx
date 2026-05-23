@@ -143,55 +143,57 @@ export default function DisputeDetailPage() {
       </Button>
 
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold">{dispute.title}</h1>
-          <p className="text-text-secondary mt-1">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-xl sm:text-2xl font-bold truncate">{dispute.title}</h1>
+          <p className="text-text-secondary mt-1 text-sm sm:text-base truncate">
             Contract: {dispute.contract?.title}
           </p>
         </div>
-        <Badge className={stageConfig[dispute.status]?.color || ""}>
+        <Badge className={`flex-shrink-0 ${stageConfig[dispute.status]?.color || ""}`}>
           {stageConfig[dispute.status]?.label || dispute.status}
         </Badge>
       </div>
 
       {/* Stage Timeline */}
-      <Card className="glass-elevated p-6 rounded-xl border-border">
+      <Card className="glass-elevated p-4 sm:p-6 rounded-xl border-border">
         <h3 className="font-display font-semibold mb-4">Dispute Progress</h3>
-        <div className="flex items-center gap-2">
-          {stages.map((stage, i) => {
-            const isCompleted = i <= currentStageIndex;
-            const isCurrent = stage === dispute.status;
-            const config = stageConfig[stage];
-            return (
-              <div key={stage} className="flex items-center flex-1">
-                <div className="flex flex-col items-center flex-1">
-                  <motion.div
-                    initial={false}
-                    animate={{
-                      scale: isCurrent ? 1.2 : 1,
-                      backgroundColor: isCompleted ? "var(--accent-primary)" : "var(--bg-elevated)",
-                    }}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center border ${
-                      isCompleted ? "border-accent-primary" : "border-border"
-                    } ${isCurrent ? "animate-pulse-ring" : ""}`}
-                  >
-                    <config.icon className={`w-4 h-4 ${isCompleted ? "text-white" : "text-text-secondary"}`} />
-                  </motion.div>
-                  <span className={`text-xs mt-2 text-center ${isCurrent ? "text-accent-primary font-medium" : "text-text-secondary"}`}>
-                    {config.label}
-                  </span>
+        <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 pb-2">
+          <div className="flex items-center gap-2 min-w-[500px]">
+            {stages.map((stage, i) => {
+              const isCompleted = i <= currentStageIndex;
+              const isCurrent = stage === dispute.status;
+              const config = stageConfig[stage];
+              return (
+                <div key={stage} className="flex items-center flex-1">
+                  <div className="flex flex-col items-center flex-1">
+                    <motion.div
+                      initial={false}
+                      animate={{
+                        scale: isCurrent ? 1.2 : 1,
+                        backgroundColor: isCompleted ? "var(--accent-primary)" : "var(--bg-elevated)",
+                      }}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center border ${
+                        isCompleted ? "border-accent-primary" : "border-border"
+                      } ${isCurrent ? "animate-pulse-ring" : ""}`}
+                    >
+                      <config.icon className={`w-4 h-4 ${isCompleted ? "text-white" : "text-text-secondary"}`} />
+                    </motion.div>
+                    <span className={`text-xs mt-2 text-center whitespace-nowrap ${isCurrent ? "text-accent-primary font-medium" : "text-text-secondary"}`}>
+                      {config.label}
+                    </span>
+                  </div>
+                  {i < stages.length - 1 && (
+                    <div
+                      className={`h-0.5 flex-1 mx-1 rounded ${
+                        i < currentStageIndex ? "bg-accent-primary" : "bg-border"
+                      }`}
+                    />
+                  )}
                 </div>
-                {i < stages.length - 1 && (
-                  <div
-                    className={`h-0.5 flex-1 mx-1 rounded ${
-                      i < currentStageIndex ? "bg-accent-primary" : "bg-border"
-                    }`}
-                  />
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </Card>
 
@@ -400,7 +402,7 @@ export default function DisputeDetailPage() {
             </div>
 
             {/* Readiness Status */}
-            <div className="flex justify-center gap-6 mb-6">
+            <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-6 mb-6">
               <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
                 dispute.clientReady
                   ? "border-accent-success/30 bg-accent-success/10"

@@ -104,26 +104,26 @@ export default function VerdictPanel({
     >
       <Card className="glass-elevated rounded-2xl border-border overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-accent-primary/10 to-accent-secondary/10 px-6 py-4 border-b border-border">
-          <div className="flex items-center gap-3">
+        <div className="bg-gradient-to-r from-accent-primary/10 to-accent-secondary/10 px-4 sm:px-6 py-4 border-b border-border">
+          <div className="flex flex-wrap items-center gap-3">
             <Scale className="w-6 h-6 text-accent-primary" />
-            <h3 className="font-display text-xl font-bold">
+            <h3 className="font-display text-lg sm:text-xl font-bold">
               {disputeStatus === "RESOLVED" ? "Final Verdict" : "AI Verdict"}
             </h3>
             {verdict.escalatedToHuman && (
-              <span className="ml-auto px-3 py-1 rounded-full bg-accent-danger/20 text-accent-danger text-xs font-medium">
+              <span className="px-3 py-1 rounded-full bg-accent-danger/20 text-accent-danger text-xs font-medium">
                 Escalated to Human Review
               </span>
             )}
             {challengeCount > 0 && (
-              <span className="ml-auto px-3 py-1 rounded-full bg-accent-warning/20 text-accent-warning text-xs font-medium">
+              <span className="px-3 py-1 rounded-full bg-accent-warning/20 text-accent-warning text-xs font-medium">
                 Re-analyzed after challenge #{challengeCount}
               </span>
             )}
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-6">
           {/* Confidence + Fund Split Row */}
           <div className="grid lg:grid-cols-3 gap-6">
             {/* Confidence Meter */}
@@ -190,8 +190,8 @@ export default function VerdictPanel({
           {/* Fault Split */}
           <div className="p-4 bg-bg-primary rounded-xl border border-border">
             <h4 className="text-sm font-medium text-text-secondary mb-2">Fault Assessment</h4>
-            <div className="flex items-center gap-4">
-              <span className="text-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <span className="text-sm whitespace-nowrap">
                 Client: <span className="font-mono font-semibold text-accent-danger">{verdict.clientFaultPercent}%</span>
               </span>
               <div className="flex-1 h-2 bg-bg-elevated rounded-full overflow-hidden">
@@ -202,7 +202,7 @@ export default function VerdictPanel({
                   className="h-full bg-accent-warning rounded-full"
                 />
               </div>
-              <span className="text-sm">
+              <span className="text-sm whitespace-nowrap">
                 Freelancer: <span className="font-mono font-semibold text-accent-warning">{verdict.freelancerFaultPercent}%</span>
               </span>
             </div>

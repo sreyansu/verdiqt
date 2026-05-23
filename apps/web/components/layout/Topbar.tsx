@@ -1,6 +1,6 @@
 "use client";
 
-import { Scale, Bell, Menu, User } from "lucide-react";
+import { Scale, Bell, Menu, User, LogOut, Shield, Users } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -10,8 +10,10 @@ import {
   Wallet,
   Play,
 } from "lucide-react";
+import { useUserStore } from "@/store/userStore";
+import { useAuth } from "@/providers/AuthProvider";
 
-const navItems = [
+const userNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/contracts", label: "Contracts", icon: FileText },
   { href: "/disputes", label: "Disputes", icon: Scale },
@@ -19,8 +21,18 @@ const navItems = [
   { href: "/demo", label: "Demo", icon: Play },
 ];
 
+const adminNavItems = [
+  { href: "/admin", label: "Admin Portal", icon: Shield },
+  { href: "/admin/disputes", label: "Disputes", icon: Scale },
+  { href: "/admin/users", label: "Users", icon: Users },
+];
+
 export default function Topbar() {
   const pathname = usePathname();
+  const { dbUser } = useUserStore();
+  const { signOut } = useAuth();
+
+  const navItems = dbUser?.role === "ADMIN" ? adminNavItems : userNavItems;
 
   return (
     <header className="sticky top-0 z-40 glass border-b border-border px-4 lg:px-6 py-3 print:hidden">
@@ -38,7 +50,7 @@ export default function Topbar() {
                 </div>
                 <span className="font-display font-bold text-xl gradient-text">Verdiqt</span>
               </div>
-              <nav className="px-3 py-4 space-y-1">
+              <nav className="px-3 py-4 space-y-1 flex-1">
                 {navItems.map((item) => {
                   const isActive = pathname.startsWith(item.href);
                   return (
@@ -57,6 +69,24 @@ export default function Topbar() {
                   );
                 })}
               </nav>
+              {/* User info + Sign Out */}
+              <div className="px-3 py-4 border-t border-border mt-auto">
+                <div className="flex items-center gap-3 px-3 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-accent-primary/10 flex items-center justify-center flex-shrink-0">
+                    <User className="w-4 h-4 text-accent-primary" />
+                  </div>
+                  <span className="text-sm font-medium text-text-primary truncate">
+                    {dbUser?.name || "Loading..."}
+                  </span>
+                </div>
+                <button
+                  onClick={signOut}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-accent-danger hover:bg-accent-danger/10 transition-colors w-full"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span className="text-sm font-medium">Sign Out</span>
+                </button>
+              </div>
             </SheetContent>
           </Sheet>
 
