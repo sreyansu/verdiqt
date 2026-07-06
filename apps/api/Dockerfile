@@ -1,20 +1,21 @@
 FROM node:20-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 # Step 1: Filter workspace to only include the api app
 FROM base AS builder
 WORKDIR /app
-RUN npm install -g turbo
+RUN pnpm add -g turbo@^2.4.0
 COPY . .
-RUN turbo prune --scope=@verdiqt/api --docker
+RUN turbo prune @verdiqt/api --docker
 
 # Step 2: Install dependencies
 FROM base AS installer
 WORKDIR /app
 COPY --from=builder /app/out/json/ .
 COPY --from=builder /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
 RUN pnpm install --frozen-lockfile
 
 # Step 3: Build the project
@@ -37,4 +38,4 @@ COPY --from=sourcer /app/ .
 
 WORKDIR /app/apps/api
 EXPOSE 4000
-CMD ["npm", "run", "start"]
+CMD ["node", "dist/index.js"]
