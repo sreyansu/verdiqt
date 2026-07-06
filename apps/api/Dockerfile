@@ -6,7 +6,7 @@ RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 # Step 1: Filter workspace to only include the api app
 FROM base AS builder
 WORKDIR /app
-RUN pnpm add -g turbo@^2.4.0
+RUN pnpm add -g turbo
 COPY . .
 RUN turbo prune @verdiqt/api --docker
 
