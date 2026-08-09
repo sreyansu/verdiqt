@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { prisma } from "../lib/prisma";
+import { User } from "../models/User";
 
 /**
  * Demo-mode middleware: skips Clerk auth entirely.
@@ -12,19 +12,15 @@ export async function demoAuthWithUser(
 ) {
   try {
     // Find or create a demo user
-    let user = await prisma.user.findFirst({
-      where: { email: "demo@verdiqt.app" },
-    });
+    let user = await User.findOne({ email: "demo@verdiqt.app" });
 
     if (!user) {
-      user = await prisma.user.create({
-        data: {
-          clerkId: "demo-001",
-          email: "demo@verdiqt.app",
-          name: "Demo User",
-          role: "CLIENT",
-          walletBalance: 100000,
-        },
+      user = await User.create({
+        clerkId: "demo-001",
+        email: "demo@verdiqt.app",
+        name: "Demo User",
+        role: "CLIENT",
+        walletBalance: 100000,
       });
     }
 

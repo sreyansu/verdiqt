@@ -6,7 +6,10 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   signOut as firebaseSignOut,
-  User as FirebaseUser
+  User as FirebaseUser,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useUserStore } from "@/store/userStore";
@@ -16,6 +19,8 @@ interface AuthContextType {
   user: FirebaseUser | null;
   loading: boolean;
   signInWithGoogle: (role?: "CLIENT" | "FREELANCER") => Promise<void>;
+  signUpWithEmail: (email: string, password: string, name: string, role: "CLIENT" | "FREELANCER") => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -23,6 +28,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signInWithGoogle: async () => {},
+  signUpWithEmail: async () => {},
+  signInWithEmail: async () => {},
   signOut: async () => {},
 });
 
@@ -103,6 +110,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signUpWithEmail = async (email: string, password: string, name: string, role: "CLIENT" | "FREELANCER") => {
+    try {
+      // 1. Create the user in Firebase Auth
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // 2. Update the Firebase user's profile with their name
+      await updateProfile(result.user, { displayName: name });
+      
+      // 3. Get the token
+      const token = await result.user.getIdToken();
+      
+      // 4. Sync to MongoDB with the requested role
+      const { data } = await api.post("/auth/sync", {
+        name: name,
+        email: result.user.email,
+        avatarUrl: null, // Initial signup with email has no avatar
+        role: role,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setDbUser(data.data);
+    } catch (error) {
+      console.error("Error signing up with email:", error);
+      throw error;
+    }
+  };
+
+  const signInWithEmail = async (email: string, password: string) => {
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      const token = await result.user.getIdToken();
+      
+      // Let the onAuthStateChanged listener fetch the DB user profile normally,
+      // but we can also fetch it immediately to ensure quick state update.
+      const { data } = await api.get("/auth/me", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setDbUser(data.data);
+    } catch (error) {
+      console.error("Error signing in with email:", error);
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     try {
       await firebaseSignOut(auth);
@@ -113,7 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signUpWithEmail, signInWithEmail, signOut }}>
       {children}
     </AuthContext.Provider>
   );

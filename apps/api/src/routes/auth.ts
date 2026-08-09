@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { prisma } from "../lib/prisma";
+import { User } from "../models/User";
 import * as admin from "firebase-admin";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 
@@ -37,17 +37,21 @@ router.post(
       }
 
       // Ensure admin user exists in DB with ADMIN role
-      await prisma.user.upsert({
-        where: { email: ADMIN_EMAIL },
-        update: { role: "ADMIN" },
-        create: {
-          clerkId: firebaseUid,
-          email: ADMIN_EMAIL,
-          name: "Platform Admin",
-          role: "ADMIN",
-          walletBalance: 0,
+      await User.findOneAndUpdate(
+        { email: ADMIN_EMAIL.toLowerCase() },
+        {
+          $set: {
+            role: "ADMIN",
+          },
+          $setOnInsert: {
+            clerkId: firebaseUid,
+            email: ADMIN_EMAIL.toLowerCase(),
+            name: "Platform Admin",
+            walletBalance: 0,
+          },
         },
-      });
+        { upsert: true, new: true }
+      );
 
       // Create a custom Firebase token for the admin
       const customToken = await admin.auth().createCustomToken(firebaseUid);
@@ -83,21 +87,37 @@ router.post(
       // Extract UID and treat it as clerkId (we'll keep the column name but store firebase uid)
       const firebaseUid = decodedUser.uid;
 
-      const user = await prisma.user.upsert({
-        where: { email: decodedUser.email },
-        update: { 
-          name: name || undefined,
-          avatarUrl: avatarUrl || undefined,
-        },
-        create: {
-          clerkId: firebaseUid, 
-          email: decodedUser.email,
-          name: name || decodedUser.name || "App User",
-          role: role || "CLIENT",
-          avatarUrl: avatarUrl || decodedUser.picture || null,
-          walletBalance: 100000,
-        },
-      });
+      const updateDoc: any = {};
+      if (name) updateDoc.name = name;
+      if (avatarUrl) updateDoc.avatarUrl = avatarUrl;
+
+      const setOnInsertDoc: any = {
+        clerkId: firebaseUid,
+        email: decodedUser.email.toLowerCase(),
+        role: role || "CLIENT",
+        walletBalance: 100000,
+      };
+
+      if (!name) {
+        setOnInsertDoc.name = decodedUser.name || "App User";
+      }
+      if (!avatarUrl) {
+        setOnInsertDoc.avatarUrl = (decodedUser as any).picture || null;
+      }
+
+      const updateQuery: any = {
+        $setOnInsert: setOnInsertDoc,
+      };
+
+      if (Object.keys(updateDoc).length > 0) {
+        updateQuery.$set = updateDoc;
+      }
+
+      const user = await User.findOneAndUpdate(
+        { email: decodedUser.email.toLowerCase() },
+        updateQuery,
+        { upsert: true, new: true }
+      );
 
       res.json({ success: true, data: user });
     } catch (error) {
@@ -127,10 +147,11 @@ router.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
-      const updated = await prisma.user.update({
-        where: { id: user.id },
-        data: { role: "ADMIN" },
-      });
+      const updated = await User.findByIdAndUpdate(
+        user._id || user.id,
+        { role: "ADMIN" },
+        { new: true }
+      );
       res.json({ success: true, data: updated });
     } catch (error) {
       next(error);

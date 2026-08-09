@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { prisma } from "../lib/prisma";
+import { Dispute, Contract, EscrowWallet, Verdict } from "../models";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
 import { getIO } from "../lib/socket";
@@ -24,20 +24,23 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
+      const userId = user._id || user.id;
 
-      const disputes = await prisma.dispute.findMany({
-        where: {
-          contract: {
-            OR: [{ clientId: user.id }, { freelancerId: user.id }],
-          },
-        },
-        include: {
-          contract: { include: { client: true, freelancer: true } },
-          raisedBy: true,
-          verdict: true,
-        },
-        orderBy: { createdAt: "desc" },
-      });
+      const userContracts = await Contract.find({
+        $or: [{ clientId: userId }, { freelancerId: userId }],
+      }).select("_id");
+      const contractIds = userContracts.map((c) => c._id);
+
+      const disputes = await Dispute.find({
+        contractId: { $in: contractIds },
+      })
+        .populate({
+          path: "contract",
+          populate: [{ path: "client" }, { path: "freelancer" }],
+        })
+        .populate("raisedBy")
+        .populate("verdict")
+        .sort({ createdAt: -1 });
 
       res.json({ success: true, data: disputes });
     } catch (error) {
@@ -54,13 +57,11 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
+      const userId = user._id || user.id;
       const { contractId, title, statement } = req.body;
 
       // Check contract exists and is active
-      const contract = await prisma.contract.findUnique({
-        where: { id: contractId },
-        include: { dispute: true },
-      });
+      const contract: any = await Contract.findById(contractId).populate("dispute");
 
       if (!contract) {
         res.status(404).json({ success: false, error: "Contract not found" });
@@ -77,37 +78,35 @@ router.post(
         return;
       }
 
-      const isClient = contract.clientId === user.id;
+      const isClient = contract.clientId.toString() === userId.toString();
 
       // Create dispute + freeze escrow + update contract status
-      const dispute = await prisma.dispute.create({
-        data: {
-          contractId,
-          raisedById: user.id,
-          title,
-          clientStatement: isClient ? statement : null,
-          freelancerStatement: !isClient ? statement : null,
-          status: "OPEN",
-        },
-        include: {
-          contract: { include: { client: true, freelancer: true } },
-          raisedBy: true,
-        },
+      const dispute = await Dispute.create({
+        contractId,
+        raisedById: userId,
+        title,
+        clientStatement: isClient ? statement : null,
+        freelancerStatement: !isClient ? statement : null,
+        status: "OPEN",
       });
 
       // Freeze escrow
-      await prisma.escrowWallet.update({
-        where: { contractId },
-        data: { status: "FROZEN" },
-      });
+      await EscrowWallet.findOneAndUpdate(
+        { contractId },
+        { status: "FROZEN" }
+      );
 
       // Update contract status
-      await prisma.contract.update({
-        where: { id: contractId },
-        data: { status: "DISPUTED" },
-      });
+      await Contract.findByIdAndUpdate(contractId, { status: "DISPUTED" });
 
-      res.status(201).json({ success: true, data: dispute });
+      const populatedDispute = await Dispute.findById(dispute._id)
+        .populate({
+          path: "contract",
+          populate: [{ path: "client" }, { path: "freelancer" }],
+        })
+        .populate("raisedBy");
+
+      res.status(201).json({ success: true, data: populatedDispute });
     } catch (error) {
       next(error);
     }
@@ -120,22 +119,23 @@ router.get(
   requireAuthWithUser,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const dispute = await prisma.dispute.findUnique({
-        where: { id: req.params.id as string },
-        include: {
-          contract: {
-            include: {
-              client: true,
-              freelancer: true,
-              milestones: { orderBy: { dueDate: "asc" } },
-              escrowWallet: true,
-            },
-          },
-          raisedBy: true,
-          evidence: { include: { uploadedBy: true }, orderBy: { createdAt: "desc" } },
-          verdict: true,
-        },
-      });
+      const dispute = await Dispute.findById(req.params.id)
+        .populate({
+          path: "contract",
+          populate: [
+            { path: "client" },
+            { path: "freelancer" },
+            { path: "milestones", options: { sort: { dueDate: 1 } } },
+            { path: "escrowWallet" },
+          ],
+        })
+        .populate("raisedBy")
+        .populate({
+          path: "evidence",
+          populate: { path: "uploadedBy" },
+          options: { sort: { createdAt: -1 } },
+        })
+        .populate("verdict");
 
       if (!dispute) {
         res.status(404).json({ success: false, error: "Dispute not found" });
@@ -157,21 +157,19 @@ router.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
+      const userId = (user._id || user.id).toString();
       const { statement } = req.body;
 
-      const dispute = await prisma.dispute.findUnique({
-        where: { id: req.params.id as string },
-        include: { contract: true },
-      });
+      const dispute: any = await Dispute.findById(req.params.id).populate("contract");
 
       if (!dispute) {
         res.status(404).json({ success: false, error: "Dispute not found" });
         return;
       }
 
-      const contract = (dispute as any).contract;
-      const isClient = contract.clientId === user.id;
-      const isFreelancer = contract.freelancerId === user.id;
+      const contract = dispute.contract;
+      const isClient = contract?.clientId?.toString() === userId;
+      const isFreelancer = contract?.freelancerId?.toString() === userId;
 
       if (!isClient && !isFreelancer) {
         res.status(403).json({ success: false, error: "Only contract parties can respond" });
@@ -179,23 +177,27 @@ router.patch(
       }
 
       // Prevent the party who raised the dispute from responding to it
-      if (dispute.raisedById === user.id) {
+      if (dispute.raisedById?.toString() === userId) {
         res.status(400).json({ success: false, error: "You cannot respond to your own dispute" });
         return;
       }
 
-      const updated = await prisma.dispute.update({
-        where: { id: req.params.id as string },
-        data: {
-          ...(isClient ? { clientStatement: statement } : { freelancerStatement: statement }),
-          status: "EVIDENCE_COLLECTION",
+      const updated = await Dispute.findByIdAndUpdate(
+        req.params.id,
+        {
+          $set: {
+            ...(isClient ? { clientStatement: statement } : { freelancerStatement: statement }),
+            status: "EVIDENCE_COLLECTION",
+          },
         },
-      });
+        { new: true }
+      );
 
       // Emit realtime update
       const io = getIO();
-      io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
-        disputeId: dispute.id,
+      const disputeIdStr = (dispute._id || dispute.id).toString();
+      io.to(`dispute:${disputeIdStr}`).emit("disputeStatusChange", {
+        disputeId: disputeIdStr,
         status: "EVIDENCE_COLLECTION",
       });
 
@@ -213,6 +215,7 @@ router.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
+      const userId = (user._id || user.id).toString();
       const { challengeReason } = req.body;
 
       if (!challengeReason || challengeReason.length < 20) {
@@ -223,13 +226,9 @@ router.patch(
         return;
       }
 
-      const dispute = await prisma.dispute.findUnique({
-        where: { id: req.params.id as string },
-        include: {
-          contract: true,
-          verdict: true,
-        },
-      });
+      const dispute: any = await Dispute.findById(req.params.id)
+        .populate("contract")
+        .populate("verdict");
 
       if (!dispute) {
         res.status(404).json({ success: false, error: "Dispute not found" });
@@ -237,8 +236,8 @@ router.patch(
       }
 
       // Only parties to the contract can challenge
-      const isClient = (dispute as any).contract.clientId === user.id;
-      const isFreelancer = (dispute as any).contract.freelancerId === user.id;
+      const isClient = dispute.contract?.clientId?.toString() === userId;
+      const isFreelancer = dispute.contract?.freelancerId?.toString() === userId;
       if (!isClient && !isFreelancer) {
         res.status(403).json({
           success: false,
@@ -256,7 +255,7 @@ router.patch(
         return;
       }
 
-      if (!(dispute as any).verdict) {
+      if (!dispute.verdict) {
         res.status(400).json({
           success: false,
           error: "No verdict exists to challenge",
@@ -274,25 +273,27 @@ router.patch(
       }
 
       // Delete old verdict so admin can re-analyze
-      await prisma.verdict.delete({
-        where: { id: (dispute as any).verdict.id },
-      });
+      await Verdict.findOneAndDelete({ disputeId: dispute._id });
 
       // Update dispute
-      const updated = await prisma.dispute.update({
-        where: { id: req.params.id as string },
-        data: {
-          status: "CHALLENGED",
-          challengeReason,
-          challengedById: user.id,
-          challengeCount: { increment: 1 },
+      const updated = await Dispute.findByIdAndUpdate(
+        req.params.id,
+        {
+          $set: {
+            status: "CHALLENGED",
+            challengeReason,
+            challengedById: user._id || user.id,
+          },
+          $inc: { challengeCount: 1 },
         },
-      });
+        { new: true }
+      );
 
       // Emit realtime update
       const io = getIO();
-      io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
-        disputeId: dispute.id,
+      const disputeIdStr = (dispute._id || dispute.id).toString();
+      io.to(`dispute:${disputeIdStr}`).emit("disputeStatusChange", {
+        disputeId: disputeIdStr,
         status: "CHALLENGED",
       });
 
@@ -310,11 +311,9 @@ router.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
+      const userId = (user._id || user.id).toString();
 
-      const dispute = await prisma.dispute.findUnique({
-        where: { id: req.params.id as string },
-        include: { contract: true },
-      });
+      const dispute: any = await Dispute.findById(req.params.id).populate("contract");
 
       if (!dispute) {
         res.status(404).json({ success: false, error: "Dispute not found" });
@@ -322,8 +321,8 @@ router.patch(
       }
 
       // Only parties to the contract can mark ready
-      const isClient = (dispute as any).contract.clientId === user.id;
-      const isFreelancer = (dispute as any).contract.freelancerId === user.id;
+      const isClient = dispute.contract?.clientId?.toString() === userId;
+      const isFreelancer = dispute.contract?.freelancerId?.toString() === userId;
       if (!isClient && !isFreelancer) {
         res.status(403).json({
           success: false,
@@ -363,28 +362,30 @@ router.patch(
         updateData.status = "AWAITING_AI";
       }
 
-      const updated = await prisma.dispute.update({
-        where: { id: req.params.id as string },
-        data: updateData,
-      });
+      const updated = await Dispute.findByIdAndUpdate(
+        req.params.id,
+        { $set: updateData },
+        { new: true }
+      );
 
       // Emit realtime update
       const io = getIO();
+      const disputeIdStr = (dispute._id || dispute.id).toString();
       if (otherReady) {
         // Both ready — notify everyone including admin
-        io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
-          disputeId: dispute.id,
+        io.to(`dispute:${disputeIdStr}`).emit("disputeStatusChange", {
+          disputeId: disputeIdStr,
           status: "AWAITING_AI",
         });
         io.emit("adminNotification", {
           type: "DISPUTE_READY_FOR_AI",
-          disputeId: dispute.id,
+          disputeId: disputeIdStr,
           message: `Dispute "${dispute.title}" is ready for AI analysis — both parties have submitted evidence.`,
         });
       } else {
         // One party ready — notify the dispute room
-        io.to(`dispute:${dispute.id}`).emit("disputeReadyUpdate", {
-          disputeId: dispute.id,
+        io.to(`dispute:${disputeIdStr}`).emit("disputeReadyUpdate", {
+          disputeId: disputeIdStr,
           clientReady: isClient ? true : dispute.clientReady,
           freelancerReady: isFreelancer ? true : dispute.freelancerReady,
         });

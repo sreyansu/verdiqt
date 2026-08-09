@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { prisma } from "../lib/prisma";
+import { Dispute, Contract, EscrowWallet, User, Verdict, Milestone } from "../models";
 import { requireAuthWithUser, requireAdmin } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
 import { getIO } from "../lib/socket";
@@ -18,16 +18,14 @@ router.get(
     try {
       const [totalDisputes, escalated, openDisputes, resolved, awaitingAI, challenged] =
         await Promise.all([
-          prisma.dispute.count(),
-          prisma.dispute.count({ where: { status: "ESCALATED" } }),
-          prisma.dispute.count({
-            where: {
-              status: { in: ["OPEN", "EVIDENCE_COLLECTION", "AI_ANALYZING", "VERDICT_READY"] },
-            },
+          Dispute.countDocuments(),
+          Dispute.countDocuments({ status: "ESCALATED" }),
+          Dispute.countDocuments({
+            status: { $in: ["OPEN", "EVIDENCE_COLLECTION", "AI_ANALYZING", "VERDICT_READY"] },
           }),
-          prisma.dispute.count({ where: { status: "RESOLVED" } }),
-          prisma.dispute.count({ where: { status: "AWAITING_AI" } }),
-          prisma.dispute.count({ where: { status: "CHALLENGED" } }),
+          Dispute.countDocuments({ status: "RESOLVED" }),
+          Dispute.countDocuments({ status: "AWAITING_AI" }),
+          Dispute.countDocuments({ status: "CHALLENGED" }),
         ]);
 
       res.json({
@@ -46,22 +44,17 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const statusFilter = req.query.status as string | undefined;
+      const where: any = statusFilter ? { status: statusFilter } : {};
 
-      const where = statusFilter ? { status: statusFilter } : {};
-
-      const disputes = await prisma.dispute.findMany({
-        where,
-        include: {
-          contract: { include: { client: true, freelancer: true, escrowWallet: true } },
-          raisedBy: true,
-          evidence: true,
-          verdict: true,
-        },
-        orderBy: [
-          // ESCALATED disputes bubble to the top via manual sort below
-          { createdAt: "desc" },
-        ],
-      });
+      const disputes = await Dispute.find(where)
+        .populate({
+          path: "contract",
+          populate: [{ path: "client" }, { path: "freelancer" }, { path: "escrowWallet" }],
+        })
+        .populate("raisedBy")
+        .populate("evidence")
+        .populate("verdict")
+        .sort({ createdAt: -1 });
 
       // Sort: ESCALATED first, then by createdAt desc
       const sorted = disputes.sort((a, b) => {
@@ -82,22 +75,23 @@ router.get(
   "/disputes/:id",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const dispute = await prisma.dispute.findUnique({
-        where: { id: req.params.id as string },
-        include: {
-          contract: {
-            include: {
-              client: true,
-              freelancer: true,
-              milestones: { orderBy: { dueDate: "asc" } },
-              escrowWallet: true,
-            },
-          },
-          raisedBy: true,
-          evidence: { include: { uploadedBy: true }, orderBy: { createdAt: "desc" } },
-          verdict: true,
-        },
-      });
+      const dispute = await Dispute.findById(req.params.id)
+        .populate({
+          path: "contract",
+          populate: [
+            { path: "client" },
+            { path: "freelancer" },
+            { path: "milestones", options: { sort: { dueDate: 1 } } },
+            { path: "escrowWallet" },
+          ],
+        })
+        .populate("raisedBy")
+        .populate({
+          path: "evidence",
+          populate: { path: "uploadedBy" },
+          options: { sort: { createdAt: -1 } },
+        })
+        .populate("verdict");
 
       if (!dispute) {
         res.status(404).json({ success: false, error: "Dispute not found" });
@@ -135,13 +129,12 @@ router.post(
         return;
       }
 
-      const dispute: any = await prisma.dispute.findUnique({
-        where: { id: req.params.id as string },
-        include: {
-          contract: { include: { escrowWallet: true } },
-          verdict: true,
-        },
-      });
+      const dispute: any = await Dispute.findById(req.params.id)
+        .populate({
+          path: "contract",
+          populate: { path: "escrowWallet" },
+        })
+        .populate("verdict");
 
       if (!dispute) {
         res.status(404).json({ success: false, error: "Dispute not found" });
@@ -153,7 +146,7 @@ router.post(
         return;
       }
 
-      const wallet = dispute.contract.escrowWallet;
+      const wallet = dispute.contract?.escrowWallet;
       if (!wallet) {
         res.status(400).json({ success: false, error: "No escrow wallet found" });
         return;
@@ -164,10 +157,11 @@ router.post(
       const clientRefund = (wallet.heldAmount * clientRefundPercent) / 100;
 
       // Create or update the verdict (admin override)
-      if (dispute.verdict) {
-        await prisma.verdict.update({
-          where: { id: dispute.verdict.id },
-          data: {
+      await Verdict.findOneAndUpdate(
+        { disputeId: dispute._id },
+        {
+          $set: {
+            disputeId: dispute._id,
             clientFaultPercent: clientRefundPercent,
             freelancerFaultPercent: freelancerReleasePercent,
             clientRefundPercent,
@@ -180,63 +174,51 @@ router.post(
             modelUsed: `admin:${adminUser.email}`,
             acceptedAt: new Date(),
           },
-        });
-      } else {
-        await prisma.verdict.create({
-          data: {
-            disputeId: dispute.id,
-            clientFaultPercent: clientRefundPercent,
-            freelancerFaultPercent: freelancerReleasePercent,
-            clientRefundPercent,
-            freelancerReleasePercent,
-            reasoning,
-            contractAnalysis: "Resolved by platform administrator.",
-            evidenceSummary: "Admin manual review.",
-            confidenceScore: 1.0,
-            escalatedToHuman: false,
-            modelUsed: `admin:${adminUser.email}`,
-            acceptedAt: new Date(),
-          },
-        });
-      }
+        },
+        { upsert: true, new: true }
+      );
 
       // Execute escrow split
-      await prisma.escrowWallet.update({
-        where: { id: wallet.id },
-        data: {
+      await EscrowWallet.findByIdAndUpdate(wallet._id || wallet.id, {
+        $set: {
           heldAmount: 0,
-          releasedToFreelancer: { increment: freelancerAmount },
-          refundedToClient: { increment: clientRefund },
           status: "FULLY_RELEASED",
+        },
+        $inc: {
+          releasedToFreelancer: freelancerAmount,
+          refundedToClient: clientRefund,
         },
       });
 
       // Credit user wallets
-      await prisma.user.update({
-        where: { id: dispute.contract.freelancerId },
-        data: { walletBalance: { increment: freelancerAmount } },
-      });
+      if (dispute.contract?.freelancerId) {
+        await User.findByIdAndUpdate(dispute.contract.freelancerId, {
+          $inc: { walletBalance: freelancerAmount },
+        });
+      }
 
-      await prisma.user.update({
-        where: { id: dispute.contract.clientId },
-        data: { walletBalance: { increment: clientRefund } },
-      });
+      if (dispute.contract?.clientId) {
+        await User.findByIdAndUpdate(dispute.contract.clientId, {
+          $inc: { walletBalance: clientRefund },
+        });
+      }
 
       // Update dispute + contract status
-      await prisma.dispute.update({
-        where: { id: req.params.id as string },
-        data: { status: "RESOLVED", resolvedAt: new Date() },
+      await Dispute.findByIdAndUpdate(req.params.id, {
+        $set: { status: "RESOLVED", resolvedAt: new Date() },
       });
 
-      await prisma.contract.update({
-        where: { id: dispute.contractId },
-        data: { status: "COMPLETED" },
-      });
+      if (dispute.contractId) {
+        await Contract.findByIdAndUpdate(dispute.contractId, {
+          $set: { status: "COMPLETED" },
+        });
+      }
 
       // Emit realtime update
       const io = getIO();
-      io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
-        disputeId: dispute.id,
+      const disputeIdStr = (dispute._id || dispute.id).toString();
+      io.to(`dispute:${disputeIdStr}`).emit("disputeStatusChange", {
+        disputeId: disputeIdStr,
         status: "RESOLVED",
       });
 
@@ -261,26 +243,44 @@ router.get(
     try {
       const roleFilter = req.query.role as string | undefined;
 
-      const where: any = { role: { not: "ADMIN" } };
+      const where: any = { role: { $ne: "ADMIN" } };
       if (roleFilter && ["CLIENT", "FREELANCER"].includes(roleFilter)) {
         where.role = roleFilter;
       }
 
-      const users = await prisma.user.findMany({
-        where,
-        include: {
-          _count: {
-            select: {
-              clientContracts: true,
-              freelancerContracts: true,
-              raisedDisputes: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "desc" },
+      const users = await User.find(where).sort({ createdAt: -1 });
+      const userIds = users.map((u) => u._id);
+
+      const [clientContractCounts, freelancerContractCounts, disputeCounts] = await Promise.all([
+        Contract.aggregate([
+          { $match: { clientId: { $in: userIds } } },
+          { $group: { _id: "$clientId", count: { $sum: 1 } } },
+        ]),
+        Contract.aggregate([
+          { $match: { freelancerId: { $in: userIds } } },
+          { $group: { _id: "$freelancerId", count: { $sum: 1 } } },
+        ]),
+        Dispute.aggregate([
+          { $match: { raisedById: { $in: userIds } } },
+          { $group: { _id: "$raisedById", count: { $sum: 1 } } },
+        ]),
+      ]);
+
+      const ccMap = Object.fromEntries(clientContractCounts.map((c) => [c._id.toString(), c.count]));
+      const fcMap = Object.fromEntries(freelancerContractCounts.map((c) => [c._id.toString(), c.count]));
+      const dMap = Object.fromEntries(disputeCounts.map((c) => [c._id.toString(), c.count]));
+
+      const formattedUsers = users.map((u) => {
+        const uObj: any = u.toJSON();
+        uObj._count = {
+          clientContracts: ccMap[u._id.toString()] || 0,
+          freelancerContracts: fcMap[u._id.toString()] || 0,
+          raisedDisputes: dMap[u._id.toString()] || 0,
+        };
+        return uObj;
       });
 
-      res.json({ success: true, data: users });
+      res.json({ success: true, data: formattedUsers });
     } catch (error) {
       next(error);
     }
@@ -292,13 +292,12 @@ router.post(
   "/disputes/:id/analyze",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const dispute: any = await prisma.dispute.findUnique({
-        where: { id: req.params.id as string },
-        include: {
-          contract: { include: { milestones: true } },
-          evidence: true,
-        },
-      });
+      const dispute: any = await Dispute.findById(req.params.id)
+        .populate({
+          path: "contract",
+          populate: { path: "milestones" },
+        })
+        .populate("evidence");
 
       if (!dispute) {
         res.status(404).json({ success: false, error: "Dispute not found" });
@@ -323,24 +322,19 @@ router.post(
       }
 
       // Update status to analyzing
-      await prisma.dispute.update({
-        where: { id: req.params.id as string },
-        data: { status: "AI_ANALYZING" },
+      await Dispute.findByIdAndUpdate(req.params.id, {
+        $set: { status: "AI_ANALYZING" },
       });
 
       const io = getIO();
-      io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
-        disputeId: dispute.id,
+      const disputeIdStr = (dispute._id || dispute.id).toString();
+      io.to(`dispute:${disputeIdStr}`).emit("disputeStatusChange", {
+        disputeId: disputeIdStr,
         status: "AI_ANALYZING",
       });
 
       // Delete any existing verdict (re-analysis or seeded data)
-      const existingVerdict = await prisma.verdict.findUnique({
-        where: { disputeId: dispute.id },
-      });
-      if (existingVerdict) {
-        await prisma.verdict.delete({ where: { id: existingVerdict.id } });
-      }
+      await Verdict.findOneAndDelete({ disputeId: dispute._id });
 
       // Build challenge context if re-analyzing after a challenge
       const challengeCtx = dispute.challengeCount > 0 && dispute.challengeReason
@@ -349,21 +343,33 @@ router.post(
 
       // Run AI mediation
       try {
+        const contract = dispute.contract || {};
+        const milestones = contract.milestones || [];
+        const evidence = dispute.evidence || [];
+
         const verdict = await runMediationEngine(
           {
-            contractTitle: dispute.contract.title,
-            contractDescription: dispute.contract.description,
-            totalAmount: dispute.contract.totalAmount,
-            milestones: dispute.contract.milestones.map((m: any) => ({
+            contractTitle: contract.title || "",
+            contractDescription: contract.description || "",
+            totalAmount: contract.totalAmount || 0,
+            milestones: milestones.map((m: any) => ({
               title: m.title,
               description: m.description,
               amount: m.amount,
               status: m.status,
-              dueDate: m.dueDate.toISOString(),
+              dueDate: m.dueDate ? new Date(m.dueDate).toISOString() : "",
             })),
-            clientStatement: dispute.clientStatement,
-            freelancerStatement: dispute.freelancerStatement,
-            evidenceSummaries: dispute.evidence.map(
+            clientStatement: dispute.clientStatement || "",
+            freelancerStatement: dispute.freelancerStatement || "",
+            evidenceItems: evidence.map((e: any) => ({
+              id: (e._id || e.id).toString(),
+              fileName: e.fileName,
+              fileUrl: e.fileUrl,
+              fileType: e.fileType,
+              description: e.description,
+              uploadedByRole: e.uploadedById?.toString() === contract.clientId?.toString() ? "CLIENT" : "FREELANCER",
+            })),
+            evidenceSummaries: evidence.map(
               (e: any) => `${e.fileName} (${e.fileType}): ${e.description || "No description"}`
             ),
             disputeTitle: dispute.title,
@@ -372,22 +378,34 @@ router.post(
         );
 
         // Save verdict
-        const savedVerdict = await prisma.verdict.create({
-          data: {
-            disputeId: dispute.id,
-            ...verdict,
-            modelUsed: "gemini-2.5-flash",
-          },
+        const savedVerdict = await Verdict.create({
+          disputeId: dispute._id,
+          clientFaultPercent: verdict.clientFaultPercent,
+          freelancerFaultPercent: verdict.freelancerFaultPercent,
+          clientRefundPercent: verdict.clientRefundPercent,
+          freelancerReleasePercent: verdict.freelancerReleasePercent,
+          reasoning: verdict.reasoning,
+          contractAnalysis: verdict.contractAnalysis,
+          evidenceSummary: verdict.evidenceSummary,
+          legalBasis: verdict.legalBasis,
+          escalationReason: verdict.escalationReason,
+          confidenceScore: verdict.confidenceScore,
+          escalatedToHuman: verdict.escalatedToHuman,
+          clientAdvocateReport: verdict.clientAdvocateReport,
+          freelancerDefenseReport: verdict.freelancerDefenseReport,
+          forensicAuditReport: verdict.forensicAuditReport,
+          quantumMeruitCalculation: verdict.quantumMeruitCalculation as any,
+          awardHash: verdict.awardHash,
+          modelUsed: "gemini-2.5-flash (Multi-Agent ODR)",
         });
 
         // Update dispute status
-        await prisma.dispute.update({
-          where: { id: req.params.id as string },
-          data: { status: "VERDICT_READY" },
+        await Dispute.findByIdAndUpdate(req.params.id, {
+          $set: { status: "VERDICT_READY" },
         });
 
-        io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
-          disputeId: dispute.id,
+        io.to(`dispute:${disputeIdStr}`).emit("disputeStatusChange", {
+          disputeId: disputeIdStr,
           status: "VERDICT_READY",
         });
 
@@ -396,13 +414,12 @@ router.post(
         console.error("AI Mediation Engine failed:", mediationError);
 
         // Fallback to ESCALATED status
-        await prisma.dispute.update({
-          where: { id: req.params.id as string },
-          data: { status: "ESCALATED" },
+        await Dispute.findByIdAndUpdate(req.params.id, {
+          $set: { status: "ESCALATED" },
         });
 
-        io.to(`dispute:${dispute.id}`).emit("disputeStatusChange", {
-          disputeId: dispute.id,
+        io.to(`dispute:${disputeIdStr}`).emit("disputeStatusChange", {
+          disputeId: disputeIdStr,
           status: "ESCALATED",
         });
 

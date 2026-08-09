@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { prisma } from "../lib/prisma";
+import { Contract, Milestone, EscrowWallet, User } from "../models";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
 
@@ -39,19 +39,16 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
+      const userId = user._id || user.id;
 
-      const contracts = await prisma.contract.findMany({
-        where: {
-          OR: [{ clientId: user.id }, { freelancerId: user.id }],
-        },
-        include: {
-          client: true,
-          freelancer: true,
-          milestones: true,
-          escrowWallet: true,
-        },
-        orderBy: { createdAt: "desc" },
-      });
+      const contracts = await Contract.find({
+        $or: [{ clientId: userId }, { freelancerId: userId }],
+      })
+        .populate("client")
+        .populate("freelancer")
+        .populate("milestones")
+        .populate("escrowWallet")
+        .sort({ createdAt: -1 });
 
       res.json({ success: true, data: contracts });
     } catch (error) {
@@ -77,9 +74,7 @@ router.post(
       const { title, description, totalAmount, currency, startDate, endDate, freelancerEmail, milestones } = req.body;
 
       // Find freelancer
-      const freelancer = await prisma.user.findUnique({
-        where: { email: freelancerEmail },
-      });
+      const freelancer = await User.findOne({ email: freelancerEmail.toLowerCase() });
 
       if (!freelancer) {
         res.status(404).json({ success: false, error: "Freelancer not found" });
@@ -96,33 +91,38 @@ router.post(
         return;
       }
 
-      const contract = await prisma.contract.create({
-        data: {
-          title,
-          description,
-          totalAmount,
-          currency,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
-          clientId: user.id,
-          freelancerId: freelancer.id,
-          milestones: {
-            create: milestones.map((m: any) => ({
-              title: m.title,
-              description: m.description,
-              amount: m.amount,
-              dueDate: new Date(m.dueDate),
-            })),
-          },
-        },
-        include: {
-          milestones: true,
-          client: true,
-          freelancer: true,
-        },
+      const userId = user._id || user.id;
+      const freelancerId = freelancer._id || freelancer.id;
+
+      const contract = await Contract.create({
+        title,
+        description,
+        totalAmount,
+        currency,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        clientId: userId,
+        freelancerId: freelancerId,
       });
 
-      res.status(201).json({ success: true, data: contract });
+      if (milestones && milestones.length > 0) {
+        await Milestone.insertMany(
+          milestones.map((m: any) => ({
+            contractId: contract._id,
+            title: m.title,
+            description: m.description,
+            amount: m.amount,
+            dueDate: new Date(m.dueDate),
+          }))
+        );
+      }
+
+      const populatedContract = await Contract.findById(contract._id)
+        .populate("client")
+        .populate("freelancer")
+        .populate("milestones");
+
+      res.status(201).json({ success: true, data: populatedContract });
     } catch (error) {
       next(error);
     }
@@ -135,16 +135,15 @@ router.get(
   requireAuthWithUser,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const contract = await prisma.contract.findUnique({
-        where: { id: req.params.id as string },
-        include: {
-          client: true,
-          freelancer: true,
-          milestones: { orderBy: { dueDate: "asc" } },
-          escrowWallet: true,
-          dispute: { include: { verdict: true } },
-        },
-      });
+      const contract = await Contract.findById(req.params.id)
+        .populate("client")
+        .populate("freelancer")
+        .populate({ path: "milestones", options: { sort: { dueDate: 1 } } })
+        .populate("escrowWallet")
+        .populate({
+          path: "dispute",
+          populate: { path: "verdict" },
+        });
 
       if (!contract) {
         res.status(404).json({ success: false, error: "Contract not found" });
@@ -164,9 +163,7 @@ router.put(
   requireAuthWithUser,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const existing = await prisma.contract.findUnique({
-        where: { id: req.params.id as string },
-      });
+      const existing = await Contract.findById(req.params.id);
 
       if (!existing) {
         res.status(404).json({ success: false, error: "Contract not found" });
@@ -178,11 +175,11 @@ router.put(
         return;
       }
 
-      const updated = await prisma.contract.update({
-        where: { id: req.params.id as string },
-        data: req.body,
-        include: { milestones: true },
-      });
+      const updated = await Contract.findByIdAndUpdate(
+        req.params.id,
+        { $set: req.body },
+        { new: true }
+      ).populate("milestones");
 
       res.json({ success: true, data: updated });
     } catch (error) {
@@ -199,10 +196,9 @@ router.patch(
     try {
       const { status } = req.body;
       const user = (req as any).dbUser;
+      const userId = (user._id || user.id).toString();
 
-      const contract = await prisma.contract.findUnique({
-        where: { id: req.params.id as string },
-      });
+      const contract = await Contract.findById(req.params.id);
 
       if (!contract) {
         res.status(404).json({ success: false, error: "Contract not found" });
@@ -226,14 +222,14 @@ router.patch(
 
       // Authorization checks for transitions
       if (status === "ACTIVE" && contract.status === "DRAFT") {
-        if (user.id !== contract.freelancerId) {
+        if (userId !== contract.freelancerId.toString()) {
           res.status(403).json({ success: false, error: "Only the assigned freelancer can accept and activate the contract" });
           return;
         }
       }
 
       if (status === "CANCELLED" && contract.status === "DRAFT") {
-        if (user.id !== contract.clientId) {
+        if (userId !== contract.clientId.toString()) {
           res.status(403).json({ success: false, error: "Only the client can cancel a draft contract" });
           return;
         }
@@ -241,26 +237,31 @@ router.patch(
 
       // Auto-create escrow wallet on activation
       if (status === "ACTIVE") {
-        await prisma.escrowWallet.create({
-          data: {
-            contractId: contract.id,
-            totalAmount: contract.totalAmount,
-            heldAmount: contract.totalAmount,
+        await EscrowWallet.findOneAndUpdate(
+          { contractId: contract._id },
+          {
+            $setOnInsert: {
+              contractId: contract._id,
+              totalAmount: contract.totalAmount,
+              heldAmount: contract.totalAmount,
+            },
           },
-        });
+          { upsert: true, new: true }
+        );
 
         // Deduct from client wallet
-        await prisma.user.update({
-          where: { id: contract.clientId },
-          data: { walletBalance: { decrement: contract.totalAmount } },
+        await User.findByIdAndUpdate(contract.clientId, {
+          $inc: { walletBalance: -contract.totalAmount },
         });
       }
 
-      const updated = await prisma.contract.update({
-        where: { id: req.params.id as string },
-        data: { status },
-        include: { milestones: true, escrowWallet: true },
-      });
+      const updated = await Contract.findByIdAndUpdate(
+        req.params.id,
+        { status },
+        { new: true }
+      )
+        .populate("milestones")
+        .populate("escrowWallet");
 
       res.json({ success: true, data: updated });
     } catch (error) {

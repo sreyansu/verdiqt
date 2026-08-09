@@ -23,7 +23,7 @@ FROM base AS sourcer
 WORKDIR /app
 COPY --from=installer /app/ .
 COPY --from=builder /app/out/full/ .
-# Generate prisma client inside the workspace and compile TS
+# Compile TypeScript
 RUN pnpm --filter @verdiqt/api run build
 
 # Step 4: Run the app

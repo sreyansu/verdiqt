@@ -493,6 +493,7 @@ export default function DisputeDetailPage() {
         <VerdictPanel
           verdict={dispute.verdict}
           contract={dispute.contract}
+          dispute={dispute}
           onUpdate={fetchDispute}
           disputeStatus={dispute.status}
           disputeId={dispute.id}

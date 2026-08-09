@@ -1,14 +1,10 @@
 services:
   - type: web
     name: verdiqt-api
-    runtime: node
+    runtime: docker
     region: oregon
-    buildCommand: |
-      npm install -g pnpm@9.15.0 &&
-      pnpm install --no-frozen-lockfile &&
-      cd apps/api &&
-      pnpm build
-    startCommand: cd apps/api && node dist/index.js
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
     envVars:
       - key: NODE_ENV
         value: production

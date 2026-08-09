@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import multer = require("multer");
-import { prisma } from "../lib/prisma";
+import { Evidence, Dispute } from "../models";
 import { cloudinary } from "../lib/cloudinary";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 
@@ -36,6 +36,7 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
+      const userId = user._id || user.id;
       const file = req.file;
       const { disputeId, description } = req.body;
 
@@ -45,9 +46,7 @@ router.post(
       }
 
       // Verify dispute exists and is in valid state
-      const dispute = await prisma.dispute.findUnique({
-        where: { id: disputeId },
-      });
+      const dispute = await Dispute.findById(disputeId);
 
       if (!dispute) {
         res.status(404).json({ success: false, error: "Dispute not found" });
@@ -84,19 +83,18 @@ router.post(
       });
 
       // Save record
-      const evidence = await prisma.evidence.create({
-        data: {
-          disputeId,
-          uploadedById: user.id,
-          fileName: file.originalname,
-          fileUrl: uploadResult.secure_url,
-          fileType: file.mimetype,
-          description,
-        },
-        include: { uploadedBy: true },
+      const evidence = await Evidence.create({
+        disputeId,
+        uploadedById: userId,
+        fileName: file.originalname,
+        fileUrl: uploadResult.secure_url,
+        fileType: file.mimetype,
+        description,
       });
 
-      res.status(201).json({ success: true, data: evidence });
+      const populatedEvidence = await Evidence.findById(evidence._id).populate("uploadedBy");
+
+      res.status(201).json({ success: true, data: populatedEvidence });
     } catch (error) {
       next(error);
     }
@@ -109,11 +107,9 @@ router.get(
   requireAuthWithUser,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const evidence = await prisma.evidence.findMany({
-        where: { disputeId: req.params.disputeId as string },
-        include: { uploadedBy: true },
-        orderBy: { createdAt: "desc" },
-      });
+      const evidence = await Evidence.find({ disputeId: req.params.disputeId as string })
+        .populate("uploadedBy")
+        .sort({ createdAt: -1 });
 
       res.json({ success: true, data: evidence });
     } catch (error) {
@@ -129,28 +125,26 @@ router.delete(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
+      const userId = (user._id || user.id).toString();
 
-      const evidence: any = await prisma.evidence.findUnique({
-        where: { id: req.params.id as string },
-        include: { dispute: true },
-      });
+      const evidence: any = await Evidence.findById(req.params.id).populate("dispute");
 
       if (!evidence) {
         res.status(404).json({ success: false, error: "Evidence not found" });
         return;
       }
 
-      if (evidence.uploadedById !== user.id) {
+      if (evidence.uploadedById?.toString() !== userId) {
         res.status(403).json({ success: false, error: "Can only delete your own evidence" });
         return;
       }
 
-      if (evidence.dispute.status !== "OPEN") {
+      if (evidence.dispute?.status !== "OPEN") {
         res.status(400).json({ success: false, error: "Can only delete evidence in open disputes" });
         return;
       }
 
-      await prisma.evidence.delete({ where: { id: req.params.id as string } });
+      await Evidence.findByIdAndDelete(req.params.id);
 
       res.json({ success: true, message: "Evidence deleted" });
     } catch (error) {

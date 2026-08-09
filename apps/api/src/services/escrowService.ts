@@ -1,22 +1,23 @@
-import { prisma } from "../lib/prisma";
+import { EscrowWallet } from "../models/EscrowWallet";
+import { Contract } from "../models/Contract";
+import { User } from "../models/User";
 
-// Mock escrow operations — in production, these would interface with a payment gateway
+// Mock escrow operations — in production, these interface with a payment gateway
 
 export async function createEscrowWallet(contractId: string, totalAmount: number) {
-  return prisma.escrowWallet.create({
-    data: {
-      contractId,
-      totalAmount,
-      heldAmount: totalAmount,
-    },
+  return EscrowWallet.create({
+    contractId,
+    totalAmount,
+    heldAmount: totalAmount,
   });
 }
 
 export async function freezeEscrow(contractId: string) {
-  return prisma.escrowWallet.update({
-    where: { contractId },
-    data: { status: "FROZEN" },
-  });
+  return EscrowWallet.findOneAndUpdate(
+    { contractId },
+    { status: "FROZEN" },
+    { new: true }
+  );
 }
 
 export async function executeEscrowSplit(
@@ -24,10 +25,7 @@ export async function executeEscrowSplit(
   freelancerPercent: number,
   clientRefundPercent: number
 ) {
-  const wallet = await prisma.escrowWallet.findUnique({
-    where: { contractId },
-    include: { contract: true },
-  });
+  const wallet: any = await EscrowWallet.findOne({ contractId }).populate("contract");
 
   if (!wallet) throw new Error("Escrow wallet not found");
 
@@ -35,26 +33,28 @@ export async function executeEscrowSplit(
   const clientRefund = (wallet.heldAmount * clientRefundPercent) / 100;
 
   // Update wallet
-  await prisma.escrowWallet.update({
-    where: { id: wallet.id },
-    data: {
-      heldAmount: 0,
-      releasedToFreelancer: { increment: freelancerAmount },
-      refundedToClient: { increment: clientRefund },
-      status: "FULLY_RELEASED",
+  await EscrowWallet.findByIdAndUpdate(wallet._id, {
+    heldAmount: 0,
+    $inc: {
+      releasedToFreelancer: freelancerAmount,
+      refundedToClient: clientRefund,
     },
+    status: "FULLY_RELEASED",
   });
 
   // Update user balances
-  await prisma.user.update({
-    where: { id: wallet.contract.freelancerId },
-    data: { walletBalance: { increment: freelancerAmount } },
-  });
+  if (wallet.contract?.freelancerId) {
+    await User.findByIdAndUpdate(wallet.contract.freelancerId, {
+      $inc: { walletBalance: freelancerAmount },
+    });
+  }
 
-  await prisma.user.update({
-    where: { id: wallet.contract.clientId },
-    data: { walletBalance: { increment: clientRefund } },
-  });
+  if (wallet.contract?.clientId) {
+    await User.findByIdAndUpdate(wallet.contract.clientId, {
+      $inc: { walletBalance: clientRefund },
+    });
+  }
 
   return { freelancerAmount, clientRefund };
 }
+

@@ -476,7 +476,7 @@ export default function AdminDisputeDetailPage() {
             </div>
             <div className="p-3 bg-bg-primary rounded-lg border border-border">
               <p className="text-xs text-text-secondary mb-1">AI Reasoning</p>
-              <p className="text-sm text-text-primary leading-relaxed">
+              <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
                 {dispute.verdict.reasoning}
               </p>
             </div>
@@ -502,6 +502,79 @@ export default function AdminDisputeDetailPage() {
                 </p>
               </div>
             )}
+
+            {/* Multi-Agent Deliberation Reports */}
+            {(dispute.verdict.clientAdvocateReport || dispute.verdict.freelancerDefenseReport || dispute.verdict.juryPanelReport) && (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+                {dispute.verdict.clientAdvocateReport && (
+                  <div className="p-3 bg-red-950/10 border border-red-500/20 rounded-lg">
+                    <p className="text-xs font-bold text-red-400 mb-1">
+                      Client Advocate Prosecution (ICA Section 37/Section 73)
+                    </p>
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                      {dispute.verdict.clientAdvocateReport}
+                    </p>
+                  </div>
+                )}
+                {dispute.verdict.freelancerDefenseReport && (
+                  <div className="p-3 bg-green-950/10 border border-green-500/20 rounded-lg">
+                    <p className="text-xs font-bold text-green-400 mb-1">
+                      Freelancer Defense (Quantum Meruit ICA Section 70)
+                    </p>
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                      {dispute.verdict.freelancerDefenseReport}
+                    </p>
+                  </div>
+                )}
+                {dispute.verdict.juryPanelReport && (
+                  <div className="p-3 bg-purple-950/10 border border-purple-500/20 rounded-lg">
+                    <p className="text-xs font-bold text-purple-400 mb-1">
+                      Jury Panel Findings
+                    </p>
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                      {dispute.verdict.juryPanelReport}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Forensic Audit Report */}
+            {dispute.verdict.forensicAuditReport && (
+              <div className="p-3 bg-bg-primary rounded-lg border border-border">
+                <p className="text-xs font-bold text-accent-primary mb-1">
+                  Forensic Evidence Auditor Report (BSA 2023 Section 65B)
+                </p>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  {dispute.verdict.forensicAuditReport}
+                </p>
+              </div>
+            )}
+
+            {/* Quantum Meruit Math Bounds */}
+            {dispute.verdict.quantumMeruitCalculation && (
+              <div className="p-3 bg-accent-secondary/5 rounded-lg border border-accent-secondary/20">
+                <p className="text-xs font-bold text-accent-secondary mb-1">
+                  Neuro-Symbolic Quantum Meruit Baseline
+                </p>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  {dispute.verdict.quantumMeruitCalculation.formulaExplanation}
+                </p>
+              </div>
+            )}
+
+            {/* SHA-256 Award Hash */}
+            {dispute.verdict.awardHash && (
+              <div className="p-2.5 bg-bg-elevated rounded-lg border border-border flex items-center justify-between text-xs">
+                <span className="text-text-secondary font-mono text-[11px] truncate max-w-md">
+                  SHA-256 Hash: {dispute.verdict.awardHash}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 bg-accent-success/20 text-accent-success rounded font-semibold">
+                  Verified Seal
+                </span>
+              </div>
+            )}
+
             {dispute.verdict.escalatedToHuman && dispute.verdict.escalationReason && dispute.verdict.escalationReason !== "N/A" && (
               <div className="p-3 bg-accent-danger/5 rounded-lg border border-accent-danger/20">
                 <p className="text-xs text-accent-danger font-medium mb-1 flex items-center gap-1">

@@ -115,6 +115,8 @@ export default function ContractDetailPage() {
       visibility: element.style.visibility,
       position: element.style.position,
       zIndex: element.style.zIndex,
+      left: element.style.left,
+      top: element.style.top,
     };
 
     try {
@@ -123,12 +125,15 @@ export default function ContractDetailPage() {
       element.style.visibility = "visible";
       element.style.position = "relative";
       element.style.zIndex = "1000";
+      element.style.left = "0px";
+      element.style.top = "0px";
 
       await new Promise(requestAnimationFrame);
 
       const canvas = await toCanvas(element, {
         backgroundColor: "#ffffff",
         pixelRatio: 2,
+        fontEmbedCSS: "",
       });
 
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -175,6 +180,8 @@ export default function ContractDetailPage() {
       element.style.visibility = originalStyles.visibility;
       element.style.position = originalStyles.position;
       element.style.zIndex = originalStyles.zIndex;
+      element.style.left = originalStyles.left;
+      element.style.top = originalStyles.top;
       setDownloadingPdf(false);
     }
   };

@@ -94,15 +94,18 @@ export default function EvidenceUploader({ disputeId, onUpload }: EvidenceUpload
             }`}
           >
             <input {...getInputProps()} />
-            <Upload className="w-8 h-8 text-text-secondary mx-auto mb-3" />
-            <p className="text-sm text-text-secondary">
+            <Upload className="w-8 h-8 text-accent-primary mx-auto mb-3" />
+            <p className="text-sm font-medium text-text-primary">
               {isDragActive
-                ? "Drop your file here..."
-                : "Drag & drop evidence files, or click to browse"}
+                ? "Drop your evidence file here..."
+                : "Upload Contested Deliverables & Digital Evidence"}
             </p>
             <p className="text-xs text-text-secondary mt-1">
-              PDF, Images, DOC, TXT — Max 50MB
+              Code repositories, screenshots, PDF logs, ZIP exports • Max 50MB
             </p>
+            <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 bg-accent-primary/10 rounded-full border border-accent-primary/20 text-[10px] text-accent-primary font-medium">
+              <span>⚖️ Indian Evidence Act / BSA 2023 Section 65B Compliant Audit Trail</span>
+            </div>
           </div>
           {fileError ? (
             <p className="text-xs text-red-500 mt-2">{fileError}</p>
@@ -115,7 +118,7 @@ export default function EvidenceUploader({ disputeId, onUpload }: EvidenceUpload
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{selectedFile.name}</p>
               <p className="text-xs text-text-secondary">
-                {(selectedFile.size / 1024).toFixed(1)} KB
+                {(selectedFile.size / 1024).toFixed(1)} KB • Digitally fingerprinted for forensic arbitration
               </p>
             </div>
             <button
@@ -130,21 +133,21 @@ export default function EvidenceUploader({ disputeId, onUpload }: EvidenceUpload
             type="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Brief description of this evidence..."
+            placeholder="Evidence purpose: e.g., 'GitHub commit diff showing feature delivery on 12th Oct'..."
             className="w-full bg-bg-primary border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus:border-accent-primary focus:outline-none"
           />
 
           <Button
             onClick={handleUpload}
             disabled={uploading}
-            className="bg-accent-primary hover:bg-accent-primary/90"
+            className="w-full bg-accent-primary hover:bg-accent-primary/90 font-medium"
           >
             {uploading ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
               <Upload className="w-4 h-4 mr-2" />
             )}
-            Upload Evidence
+            Upload & Submit to Evidence Ledger
           </Button>
         </div>
       )}

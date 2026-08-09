@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { prisma } from "../lib/prisma";
+import { Verdict, Dispute, Contract, EscrowWallet, User } from "../models";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { getIO } from "../lib/socket";
 
@@ -11,9 +11,7 @@ router.get(
   requireAuthWithUser,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const verdict = await prisma.verdict.findUnique({
-        where: { disputeId: req.params.disputeId as string },
-      });
+      const verdict = await Verdict.findOne({ disputeId: req.params.disputeId as string });
 
       if (!verdict) {
         res.status(404).json({ success: false, error: "Verdict not found" });
@@ -33,14 +31,11 @@ router.post(
   requireAuthWithUser,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const verdict: any = await prisma.verdict.findUnique({
-        where: { id: req.params.id as string },
-        include: {
-          dispute: {
-            include: {
-              contract: { include: { escrowWallet: true } },
-            },
-          },
+      const verdict: any = await Verdict.findById(req.params.id).populate({
+        path: "dispute",
+        populate: {
+          path: "contract",
+          populate: { path: "escrowWallet" },
         },
       });
 
@@ -54,7 +49,7 @@ router.post(
         return;
       }
 
-      const wallet = verdict.dispute.contract.escrowWallet;
+      const wallet = verdict.dispute?.contract?.escrowWallet;
       if (!wallet) {
         res.status(400).json({ success: false, error: "No escrow wallet found" });
         return;
@@ -65,48 +60,52 @@ router.post(
       const clientRefund = (wallet.heldAmount * verdict.clientRefundPercent) / 100;
 
       // Execute escrow split
-      await prisma.escrowWallet.update({
-        where: { id: wallet.id },
-        data: {
+      await EscrowWallet.findByIdAndUpdate(wallet._id || wallet.id, {
+        $set: {
           heldAmount: 0,
-          releasedToFreelancer: { increment: freelancerAmount },
-          refundedToClient: { increment: clientRefund },
           status: "FULLY_RELEASED",
+        },
+        $inc: {
+          releasedToFreelancer: freelancerAmount,
+          refundedToClient: clientRefund,
         },
       });
 
       // Update user wallets
-      await prisma.user.update({
-        where: { id: verdict.dispute.contract.freelancerId },
-        data: { walletBalance: { increment: freelancerAmount } },
-      });
+      const contract = verdict.dispute?.contract;
+      if (contract?.freelancerId) {
+        await User.findByIdAndUpdate(contract.freelancerId, {
+          $inc: { walletBalance: freelancerAmount },
+        });
+      }
 
-      await prisma.user.update({
-        where: { id: verdict.dispute.contract.clientId },
-        data: { walletBalance: { increment: clientRefund } },
-      });
+      if (contract?.clientId) {
+        await User.findByIdAndUpdate(contract.clientId, {
+          $inc: { walletBalance: clientRefund },
+        });
+      }
 
       // Mark verdict as accepted
-      await prisma.verdict.update({
-        where: { id: req.params.id as string },
-        data: { acceptedAt: new Date() },
+      await Verdict.findByIdAndUpdate(req.params.id, {
+        $set: { acceptedAt: new Date() },
       });
 
       // Resolve dispute
-      await prisma.dispute.update({
-        where: { id: verdict.disputeId },
-        data: { status: "RESOLVED", resolvedAt: new Date() },
+      const disputeIdStr = (verdict.disputeId || verdict.dispute?._id).toString();
+      await Dispute.findByIdAndUpdate(disputeIdStr, {
+        $set: { status: "RESOLVED", resolvedAt: new Date() },
       });
 
       // Update contract
-      await prisma.contract.update({
-        where: { id: verdict.dispute.contractId },
-        data: { status: "COMPLETED" },
-      });
+      if (verdict.dispute?.contractId) {
+        await Contract.findByIdAndUpdate(verdict.dispute.contractId, {
+          $set: { status: "COMPLETED" },
+        });
+      }
 
       const io = getIO();
-      io.to(`dispute:${verdict.disputeId}`).emit("disputeStatusChange", {
-        disputeId: verdict.disputeId,
+      io.to(`dispute:${disputeIdStr}`).emit("disputeStatusChange", {
+        disputeId: disputeIdStr,
         status: "RESOLVED",
       });
 
@@ -130,19 +129,25 @@ router.post(
   requireAuthWithUser,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const verdict = await prisma.verdict.update({
-        where: { id: req.params.id as string },
-        data: { escalatedToHuman: true },
-      });
+      const verdict = await Verdict.findByIdAndUpdate(
+        req.params.id,
+        { $set: { escalatedToHuman: true } },
+        { new: true }
+      );
 
-      await prisma.dispute.update({
-        where: { id: verdict.disputeId },
-        data: { status: "ESCALATED" },
+      if (!verdict) {
+        res.status(404).json({ success: false, error: "Verdict not found" });
+        return;
+      }
+
+      const disputeIdStr = verdict.disputeId.toString();
+      await Dispute.findByIdAndUpdate(disputeIdStr, {
+        $set: { status: "ESCALATED" },
       });
 
       const io = getIO();
-      io.to(`dispute:${verdict.disputeId}`).emit("disputeStatusChange", {
-        disputeId: verdict.disputeId,
+      io.to(`dispute:${disputeIdStr}`).emit("disputeStatusChange", {
+        disputeId: disputeIdStr,
         status: "ESCALATED",
       });
 

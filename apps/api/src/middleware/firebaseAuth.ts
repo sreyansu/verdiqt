@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import * as admin from "firebase-admin";
-import { prisma } from "../lib/prisma";
+import { User } from "../models/User";
 
 export function initFirebaseAdmin() {
   if (!admin.apps.length) {
@@ -70,9 +70,7 @@ export const requireAuthWithUser = async (
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: decodedToken.email },
-    });
+    const user = await User.findOne({ email: decodedToken.email.toLowerCase() });
 
     if (!user) {
       res.status(404).json({ success: false, error: "User not fully registered in database" });

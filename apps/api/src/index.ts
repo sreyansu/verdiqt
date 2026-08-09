@@ -9,6 +9,12 @@ import { createServer } from "http";
 
 import { errorHandler } from "./middleware/errorHandler";
 import { initSocket } from "./lib/socket";
+import { connectDB } from "./lib/db";
+
+// Connect to MongoDB
+connectDB().catch((err) => {
+  console.error("Failed to connect to MongoDB on startup:", err);
+});
 
 // Route imports
 import authRoutes from "./routes/auth";
@@ -50,6 +56,15 @@ app.use(cors({
 }));
 app.use(express.json());
 
+
+// Root info
+app.get("/", (_req: any, res: any) => {
+  res.json({
+    message: "Verdiqt API is running",
+    health: "/api/health",
+    frontend: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  });
+});
 
 // Health check
 app.get("/api/health", (_req: any, res: any) => {

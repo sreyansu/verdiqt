@@ -94,6 +94,14 @@ export default function NewContractPage() {
   const totalAmount = parseFloat(form.totalAmount) || 0;
 
   const handleSubmit = async () => {
+    // Client-side validation
+    if (form.title.length < 3) return alert("Title must be at least 3 characters.");
+    if (form.description.length < 10) return alert("Contract description must be at least 10 characters.");
+    for (let i = 0; i < milestones.length; i++) {
+      if (milestones[i].title.length < 3) return alert(`Milestone ${i+1} title must be at least 3 characters.`);
+      if (milestones[i].description.length < 5) return alert(`Milestone ${i+1} description must be at least 5 characters.`);
+    }
+
     setSubmitting(true);
     try {
       await api.post("/contracts", {

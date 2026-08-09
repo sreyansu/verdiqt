@@ -1,12 +1,18 @@
 import { Router, Request, Response, NextFunction } from "express";
 import multer = require("multer");
 import { z } from "zod";
-import { prisma } from "../lib/prisma";
+import { Milestone, Contract, EscrowWallet, User } from "../models";
 import { cloudinary } from "../lib/cloudinary";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
 
 const router: any = Router();
+
+// Accept any ISO 8601 datetime string
+const isoDatetime = z.string().refine(
+  (val) => !isNaN(Date.parse(val)),
+  { message: "Invalid datetime string" }
+);
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const upload = multer({
@@ -36,7 +42,7 @@ const createMilestoneSchema = z.object({
   title: z.string().min(3),
   description: z.string().min(5),
   amount: z.number().positive(),
-  dueDate: z.string().datetime(),
+  dueDate: isoDatetime,
 });
 
 const updateMilestoneSchema = z.object({
@@ -56,9 +62,7 @@ router.post(
     try {
       const { contractId, title, description, amount, dueDate } = req.body;
 
-      const contract = await prisma.contract.findUnique({
-        where: { id: contractId },
-      });
+      const contract = await Contract.findById(contractId);
 
       if (!contract || contract.status !== "DRAFT") {
         res.status(400).json({
@@ -68,14 +72,12 @@ router.post(
         return;
       }
 
-      const milestone = await prisma.milestone.create({
-        data: {
-          contractId,
-          title,
-          description,
-          amount,
-          dueDate: new Date(dueDate),
-        },
+      const milestone = await Milestone.create({
+        contractId,
+        title,
+        description,
+        amount,
+        dueDate: new Date(dueDate),
       });
 
       res.status(201).json({ success: true, data: milestone });
@@ -94,11 +96,9 @@ router.patch(
     try {
       const { status } = req.body;
       const user = (req as any).dbUser;
+      const userId = (user._id || user.id).toString();
 
-      const milestone: any = await prisma.milestone.findUnique({
-        where: { id: req.params.id as string },
-        include: { contract: true },
-      });
+      const milestone: any = await Milestone.findById(req.params.id).populate("contract");
 
       if (!milestone) {
         res.status(404).json({ success: false, error: "Milestone not found" });
@@ -106,8 +106,8 @@ router.patch(
       }
 
       // Role-based status update rules
-      const isClient = milestone.contract.clientId === user.id;
-      const isFreelancer = milestone.contract.freelancerId === user.id;
+      const isClient = milestone.contract?.clientId?.toString() === userId;
+      const isFreelancer = milestone.contract?.freelancerId?.toString() === userId;
 
       if (status === "SUBMITTED" && !isFreelancer) {
         res.status(403).json({ success: false, error: "Only freelancer can submit milestones" });
@@ -119,29 +119,35 @@ router.patch(
         return;
       }
 
-      const updated = await prisma.milestone.update({
-        where: { id: req.params.id as string },
-        data: {
-          status,
-          completedAt: status === "APPROVED" ? new Date() : undefined,
-        },
-      });
+      const updateData: any = { status };
+      if (status === "APPROVED") {
+        updateData.completedAt = new Date();
+      }
+
+      const updated = await Milestone.findByIdAndUpdate(
+        req.params.id,
+        { $set: updateData },
+        { new: true }
+      );
 
       // If approved, release milestone amount from escrow
       if (status === "APPROVED") {
-        await prisma.escrowWallet.update({
-          where: { contractId: milestone.contractId },
-          data: {
-            heldAmount: { decrement: milestone.amount },
-            releasedToFreelancer: { increment: milestone.amount },
+        await EscrowWallet.findOneAndUpdate(
+          { contractId: milestone.contractId },
+          {
+            $inc: {
+              heldAmount: -milestone.amount,
+              releasedToFreelancer: milestone.amount,
+            },
             status: "PARTIALLY_RELEASED",
-          },
-        });
+          }
+        );
 
-        await prisma.user.update({
-          where: { id: milestone.contract.freelancerId },
-          data: { walletBalance: { increment: milestone.amount } },
-        });
+        if (milestone.contract?.freelancerId) {
+          await User.findByIdAndUpdate(milestone.contract.freelancerId, {
+            $inc: { walletBalance: milestone.amount },
+          });
+        }
       }
 
       res.json({ success: true, data: updated });
@@ -160,17 +166,16 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
-      const milestone: any = await prisma.milestone.findUnique({
-        where: { id: req.params.id as string },
-        include: { contract: true },
-      });
+      const userId = (user._id || user.id).toString();
+
+      const milestone: any = await Milestone.findById(req.params.id).populate("contract");
 
       if (!milestone) {
         res.status(404).json({ success: false, error: "Milestone not found" });
         return;
       }
 
-      if (milestone.contract.freelancerId !== user.id) {
+      if (milestone.contract?.freelancerId?.toString() !== userId) {
         res.status(403).json({ success: false, error: "Only the assigned freelancer can submit this milestone" });
         return;
       }
@@ -202,7 +207,7 @@ router.post(
           const uploadResult = await new Promise<any>((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream(
               {
-                folder: `verdiqt/milestones/${milestone.id}`,
+                folder: `verdiqt/milestones/${milestone._id || milestone.id}`,
                 resource_type: "auto",
                 public_id: `${Date.now()}_${sanitizedName}`,
               },
@@ -231,15 +236,18 @@ router.post(
         return;
       }
 
-      const updated = await prisma.milestone.update({
-        where: { id: req.params.id as string },
-        data: {
-          status: "SUBMITTED",
-          submissionNote: submissionNote?.trim() || null,
-          submissionFiles: uploadedFiles.length ? uploadedFiles : null,
-          submittedAt: new Date(),
+      const updated = await Milestone.findByIdAndUpdate(
+        req.params.id,
+        {
+          $set: {
+            status: "SUBMITTED",
+            submissionNote: submissionNote?.trim() || null,
+            submissionFiles: uploadedFiles.length ? uploadedFiles : null,
+            submittedAt: new Date(),
+          },
         },
-      });
+        { new: true }
+      );
 
       res.json({ success: true, data: updated });
     } catch (error) {

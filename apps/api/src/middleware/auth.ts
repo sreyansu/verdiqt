@@ -1,6 +1,6 @@
 import { clerkMiddleware, requireAuth, getAuth } from "@clerk/express";
 import { Request, Response, NextFunction } from "express";
-import { prisma } from "../lib/prisma";
+import { User } from "../models/User";
 
 // Global Clerk middleware — initializes Clerk for all routes
 export { clerkMiddleware };
@@ -22,9 +22,7 @@ export async function requireAuthWithUser(
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { clerkId: auth.userId },
-    });
+    const user = await User.findOne({ clerkId: auth.userId });
 
     if (!user) {
       res.status(404).json({
