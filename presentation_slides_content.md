@@ -252,12 +252,15 @@ graph TD
         Express -->|Input Context| Engine[Mediation Pipeline Controller]
         Engine -->|Step 1: Math Bounds| Math[Deterministic Quantum Meruit Calculator]
         Engine -->|Step 2: Digital Audit| Auditor[Forensic Evidence Auditor Agent]
-        Engine -->|Step 3A: Prosecution| Prosecution[Client Advocate Agent - ICA §37/§73]
-        Engine -->|Step 3B: Defense| Defense[Freelancer Defense Agent - ICA §70]
+        Engine -->|Step 3A: Prosecution| Prosecution[Client Advocate Agent - ICA Section 37/Section 73]
+        Engine -->|Step 3B: Defense| Defense[Freelancer Defense Agent - ICA Section 70]
+        Engine -->|Step 3C: Jury Panel| Jury[Jury Panel Agent - Objective Facts]
         Engine -->|Step 4: Award| Arbitrator[Neutral Chief Arbitrator Agent]
         
         Auditor -->|Gemini 2.5 / Claude 3.5| LLM[LLM Foundation Models]
         Prosecution --> LLM
+        Defense --> LLM
+        Jury --> LLM
         Defense --> LLM
         Arbitrator --> LLM
     end
@@ -271,28 +274,30 @@ graph TD
 
 <!-- SLIDE 8 -->
 ## 📌 Slide 8: Multi-Agent AI Mediation Framework
-### 4-Stage Adversarial Judicial Pipeline
+### 5-Stage Adversarial Judicial Pipeline
 
 ```
 Stage 1: Symbolic Pre-Computation
 └── Calculate Mathematical Quantum Meruit Bounds [Min%, Max%] & Delay Penalties
 
 Stage 2: Forensic Digital Evidence Audit
-└── Impartial examination of timestamps, scope documents, commits, and logs under BSA §65B
+└── Impartial examination of timestamps, scope documents, commits, and logs under BSA Section 65B
 
-Stage 3: Adversarial Representation (Parallel Execution)
-├── 3A. Client Advocate Agent: Prosecutes material defects, missed deadlines (ICA §37/§73)
-└── 3B. Freelancer Defense Agent: Defends good-faith work, scope creep, partial delivery (ICA §70)
+Stage 3: Adversarial Representation & Fact-Finding (Parallel Execution)
+├── 3A. Client Advocate Agent: Prosecutes material defects, missed deadlines (ICA Section 37/Section 73)
+├── 3B. Freelancer Defense Agent: Defends good-faith work, scope creep, partial delivery (ICA Section 70)
+└── 3C. Jury Panel Agent: Extracts objective, assumption-free facts from claims and evidence
 
 Stage 4: Chief Arbitrator Judicial Synthesis
-└── Weighs evidence, bounds verdict to Stage 1 formula, yields split, reasons & SHA-256 hash
+└── Weighs evidence, bounds verdict to Stage 1 formula, yields split, point-based reasoning & SHA-256 hash
 ```
 
 #### Role Breakdown:
 - **Forensic Auditor**: Filters noise, verifies document admissibility, and assesses probative weight.
 - **Client Advocate**: Maximizes legitimate client refund based on unmet technical specifications.
 - **Freelancer Defense**: Establishes *Quantum Meruit* value earned and protects against moving goalposts.
-- **Chief Arbitrator**: Synthesizes adversarial submissions into an enforceable, balanced arbitration award.
+- **Jury Panel**: Ensures facts are impartially separated from opinions and assumptions.
+- **Chief Arbitrator**: Synthesizes adversarial submissions into an enforceable, balanced arbitration award in bulleted points.
 
 ---
 
