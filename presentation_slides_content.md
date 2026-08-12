@@ -589,4 +589,4 @@ erDiagram
 | *"How do you prevent the AI from hallucinating a false split?"* | Point to **Slide 9 (Neuro-Symbolic Bounding)**: The LLM does not choose numbers freely; its split is mathematically bounded by the formula between verified milestone baselines. |
 | *"Is this legally binding in India?"* | Point to **Slide 10 (Statutory Backbone)**: Cite Section 31 of the Arbitration & Conciliation Act 1996 for electronic awards and §65B of BSA 2023 for evidence admissibility. |
 | *"What happens if a user submits fraudulent evidence?"* | Point to **Slide 8 & 10 (Forensic Auditor)**: The Forensic Agent checks timestamps, cross-references files, and if confidence $<0.75$, escalates to a human arbitrator. |
-| *"Why not just use Ethereum smart contracts?"* | Highlight gas fees and UX friction for non-crypto users, while noting blockchain is part of our future scope (Slide 17). |
+
