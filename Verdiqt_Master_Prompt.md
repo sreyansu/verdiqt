@@ -1,7 +1,4 @@
-# Verdiqt — Smart Escrow & AI Dispute Mediation Platform
-## Master Build Prompt
 
----
 
 ## SYSTEM CONTEXT
 
