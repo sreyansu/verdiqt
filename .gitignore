@@ -3,14 +3,16 @@ node_modules/
 
 # env files
 .env
-.env.local
-.env.*.local
-.env.example
+.env.*
+!.env.example
+!.env.*.example
 
 # build outputs
 dist/
+build/
 .next/
 out/
+coverage/
 
 # turbo
 .turbo/
@@ -28,3 +30,4 @@ pnpm-debug.log*
 
 # prisma
 apps/api/prisma/*.db
+
