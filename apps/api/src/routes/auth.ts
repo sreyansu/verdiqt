@@ -5,18 +5,18 @@ import { requireAuthWithUser } from "../middleware/firebaseAuth";
 
 const router: any = Router();
 
-// Hardcoded admin credentials
-const ADMIN_EMAIL = "sreyansusekharmohanty@gmail.com";
-const ADMIN_PASSWORD = "Sreyansu@500";
+// Admin credentials from environment variables with fallback for local development
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "sreyansusekharmohanty@gmail.com").toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Sreyansu@500";
 
-// POST /api/auth/admin-login — Hardcoded admin sign-in
+// POST /api/auth/admin-login — Admin sign-in
 router.post(
   "/admin-login",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, password } = req.body;
 
-      if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+      if (!email || !password || email.toLowerCase() !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
         res.status(401).json({ success: false, error: "Invalid admin credentials" });
         return;
       }
