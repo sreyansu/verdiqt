@@ -20,6 +20,19 @@ export function initSocket(httpServer: HttpServer) {
   io.on("connection", (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);
 
+    // Join user notification room
+    socket.on("joinUser", (userId: string) => {
+      if (userId) {
+        socket.join(`user:${userId}`);
+      }
+    });
+
+    socket.on("leaveUser", (userId: string) => {
+      if (userId) {
+        socket.leave(`user:${userId}`);
+      }
+    });
+
     // Join dispute room for realtime updates
     socket.on("joinDispute", (disputeId: string) => {
       socket.join(`dispute:${disputeId}`);

@@ -25,6 +25,7 @@ const adminNavItems = [
   { href: "/admin", label: "Admin Portal", icon: Shield },
   { href: "/admin/disputes", label: "Disputes", icon: Scale },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/profile", label: "Profile", icon: User },
 ];
 
 const userNavItems = [
@@ -32,7 +33,7 @@ const userNavItems = [
   { href: "/contracts", label: "Contracts", icon: FileText },
   { href: "/disputes", label: "Disputes", icon: Scale },
   { href: "/wallet", label: "Wallet", icon: Wallet },
-  { href: "/demo", label: "Demo", icon: Play },
+  { href: "/profile", label: "Profile", icon: User },
 ];
 
 export default function Sidebar() {
@@ -113,23 +114,38 @@ export default function Sidebar() {
 
       {/* User avatar + Collapse */}
       <div className="px-3 py-4 border-t border-border space-y-3">
-        <div className={`flex items-center ${collapsed ? "justify-center" : "px-3 gap-3"}`}>
-          <div className="w-8 h-8 rounded-full bg-accent-primary/10 flex items-center justify-center flex-shrink-0">
-            <User className="w-4 h-4 text-accent-primary" />
+        <Link href="/profile" className={`flex items-center hover:opacity-80 transition-opacity ${collapsed ? "justify-center" : "px-3 gap-3"}`}>
+          <div className="w-8 h-8 rounded-full overflow-hidden bg-accent-primary/10 border border-accent-primary/20 flex items-center justify-center flex-shrink-0 text-accent-primary text-xs font-semibold">
+            {dbUser?.avatarUrl ? (
+              <Image
+                src={dbUser.avatarUrl}
+                alt={dbUser.name || "User"}
+                width={32}
+                height={32}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span>{dbUser?.name ? dbUser.name.slice(0, 2).toUpperCase() : "U"}</span>
+            )}
           </div>
           <AnimatePresence>
             {!collapsed && (
-              <motion.span
+              <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-sm font-medium text-text-primary truncate max-w-[150px]"
+                className="truncate max-w-[150px]"
               >
-                {dbUser?.name || "Loading..."}
-              </motion.span>
+                <p className="text-sm font-medium text-text-primary truncate">
+                  {dbUser?.name || "Loading..."}
+                </p>
+                <p className="text-[10px] font-mono text-accent-primary uppercase">
+                  {dbUser?.role || ""}
+                </p>
+              </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </Link>
         
         <div className="flex items-center gap-2">
           <button

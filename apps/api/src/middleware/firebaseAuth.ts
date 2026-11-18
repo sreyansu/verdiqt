@@ -78,6 +78,19 @@ export const requireAuthWithUser = async (
     }
 
     (req as any).dbUser = user;
+    (req as any).firebaseUser = decodedToken;
+
+    // Enforce email verification for protected API endpoints (bypass for /auth/me, /auth/sync and ADMIN users)
+    const isAuthBootstrap = req.originalUrl?.includes("/api/auth/me") || req.originalUrl?.includes("/api/auth/sync");
+    if (!isAuthBootstrap && user.role !== "ADMIN" && !decodedToken.email_verified) {
+      res.status(403).json({
+        success: false,
+        error: "Email verification required. Please verify your email to access this resource.",
+        code: "EMAIL_NOT_VERIFIED",
+      });
+      return;
+    }
+
     next();
   } catch (error) {
     next(error);

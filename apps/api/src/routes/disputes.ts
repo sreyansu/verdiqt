@@ -4,6 +4,7 @@ import { Dispute, Contract, EscrowWallet, Verdict } from "../models";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
 import { getIO } from "../lib/socket";
+import { createInAppNotification } from "../services/notificationService";
 
 const router: any = Router();
 
@@ -106,6 +107,16 @@ router.post(
         })
         .populate("raisedBy");
 
+      const respondentId = isClient ? contract.freelancerId : contract.clientId;
+      createInAppNotification({
+        recipientId: respondentId,
+        type: "DISPUTE_CREATED",
+        title: "Dispute Raised on Contract",
+        message: `${user.name} raised a dispute: "${title}" on contract "${contract.title}"`,
+        relatedEntity: { entityType: "Dispute", entityId: dispute._id.toString() },
+        targetRoute: `/disputes/${dispute._id}`,
+      }).catch(console.error);
+
       res.status(201).json({ success: true, data: populatedDispute });
     } catch (error) {
       next(error);
@@ -200,6 +211,15 @@ router.patch(
         disputeId: disputeIdStr,
         status: "EVIDENCE_COLLECTION",
       });
+
+      createInAppNotification({
+        recipientId: dispute.raisedById,
+        type: "DISPUTE_RESPONSE",
+        title: "Dispute Response Received",
+        message: `${user.name} submitted a statement for dispute: "${dispute.title}"`,
+        relatedEntity: { entityType: "Dispute", entityId: disputeIdStr },
+        targetRoute: `/disputes/${disputeIdStr}`,
+      }).catch(console.error);
 
       res.json({ success: true, data: updated });
     } catch (error) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Scale, Bell, Menu, User, LogOut, Shield, Users } from "lucide-react";
+import { Scale, Menu, User, LogOut, Shield, Users } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import Link from "next/link";
 import Image from "next/image";
@@ -9,23 +9,25 @@ import {
   LayoutDashboard,
   FileText,
   Wallet,
-  Play,
 } from "lucide-react";
 import { useUserStore } from "@/store/userStore";
 import { useAuth } from "@/providers/AuthProvider";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ProfileDropdown } from "@/components/layout/ProfileDropdown";
 
 const userNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/contracts", label: "Contracts", icon: FileText },
   { href: "/disputes", label: "Disputes", icon: Scale },
   { href: "/wallet", label: "Wallet", icon: Wallet },
-  { href: "/demo", label: "Demo", icon: Play },
+  { href: "/profile", label: "Profile", icon: User },
 ];
 
 const adminNavItems = [
   { href: "/admin", label: "Admin Portal", icon: Shield },
   { href: "/admin/disputes", label: "Disputes", icon: Scale },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/profile", label: "Profile", icon: User },
 ];
 
 export default function Topbar() {
@@ -78,14 +80,29 @@ export default function Topbar() {
               </nav>
               {/* User info + Sign Out */}
               <div className="px-3 py-4 border-t border-border mt-auto">
-                <div className="flex items-center gap-3 px-3 mb-3">
-                  <div className="w-8 h-8 rounded-full bg-accent-primary/10 flex items-center justify-center flex-shrink-0">
-                    <User className="w-4 h-4 text-accent-primary" />
+                <Link href="/profile" className="flex items-center gap-3 px-3 mb-3 hover:opacity-80 transition-opacity">
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-accent-primary/10 border border-accent-primary/20 flex items-center justify-center flex-shrink-0 text-accent-primary text-xs font-semibold">
+                    {dbUser?.avatarUrl ? (
+                      <Image
+                        src={dbUser.avatarUrl}
+                        alt={dbUser.name}
+                        width={32}
+                        height={32}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span>{dbUser?.name ? dbUser.name.slice(0, 2).toUpperCase() : "U"}</span>
+                    )}
                   </div>
-                  <span className="text-sm font-medium text-text-primary truncate">
-                    {dbUser?.name || "Loading..."}
-                  </span>
-                </div>
+                  <div className="min-w-0 flex-1 truncate">
+                    <p className="text-sm font-medium text-text-primary truncate">
+                      {dbUser?.name || "Loading..."}
+                    </p>
+                    <p className="text-[10px] font-mono text-accent-primary uppercase">
+                      {dbUser?.role || ""}
+                    </p>
+                  </div>
+                </Link>
                 <button
                   onClick={signOut}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-accent-danger hover:bg-accent-danger/10 transition-colors w-full"
@@ -112,15 +129,10 @@ export default function Topbar() {
           </div>
         </div>
 
-        {/* Right side */}
+        {/* Right side controls */}
         <div className="flex items-center gap-3">
-          <button className="p-2 rounded-lg hover:bg-bg-elevated transition-colors relative">
-            <Bell className="w-5 h-5 text-text-secondary" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent-danger rounded-full" />
-          </button>
-          <div className="w-8 h-8 rounded-full bg-accent-primary/10 flex items-center justify-center">
-            <User className="w-4 h-4 text-accent-primary" />
-          </div>
+          <NotificationBell />
+          <ProfileDropdown />
         </div>
       </div>
     </header>

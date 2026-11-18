@@ -5,6 +5,7 @@ import { Milestone, Contract, EscrowWallet, User } from "../models";
 import { cloudinary } from "../lib/cloudinary";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
+import { createInAppNotification } from "../services/notificationService";
 
 const router: any = Router();
 
@@ -147,7 +148,25 @@ router.patch(
           await User.findByIdAndUpdate(milestone.contract.freelancerId, {
             $inc: { walletBalance: milestone.amount },
           });
+
+          createInAppNotification({
+            recipientId: milestone.contract.freelancerId,
+            type: "MILESTONE_APPROVED",
+            title: "Milestone Approved",
+            message: `Your milestone "${milestone.title}" was approved. ₹${milestone.amount.toLocaleString("en-IN")} released to your wallet.`,
+            relatedEntity: { entityType: "Milestone", entityId: milestone._id.toString() },
+            targetRoute: `/contracts/${milestone.contractId}`,
+          }).catch(console.error);
         }
+      } else if (status === "REJECTED" && milestone.contract?.freelancerId) {
+        createInAppNotification({
+          recipientId: milestone.contract.freelancerId,
+          type: "MILESTONE_REJECTED",
+          title: "Milestone Rejected",
+          message: `Your milestone "${milestone.title}" was rejected and requires revision.`,
+          relatedEntity: { entityType: "Milestone", entityId: milestone._id.toString() },
+          targetRoute: `/contracts/${milestone.contractId}`,
+        }).catch(console.error);
       }
 
       res.json({ success: true, data: updated });
@@ -248,6 +267,17 @@ router.post(
         },
         { new: true }
       );
+
+      if (milestone.contract?.clientId) {
+        createInAppNotification({
+          recipientId: milestone.contract.clientId,
+          type: "MILESTONE_SUBMITTED",
+          title: "Milestone Submitted for Review",
+          message: `${user.name} submitted work for milestone: "${milestone.title}"`,
+          relatedEntity: { entityType: "Milestone", entityId: milestone._id.toString() },
+          targetRoute: `/contracts/${milestone.contractId}`,
+        }).catch(console.error);
+      }
 
       res.json({ success: true, data: updated });
     } catch (error) {

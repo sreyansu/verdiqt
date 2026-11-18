@@ -11,26 +11,90 @@ const router: any = Router();
 // All admin routes require authentication + admin role
 router.use(requireAuthWithUser, requireAdmin);
 
-// GET /api/admin/stats — Admin dashboard stats
+// GET /api/admin/stats — Admin dashboard comprehensive stats
 router.get(
   "/stats",
   async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      const [totalDisputes, escalated, openDisputes, resolved, awaitingAI, challenged] =
-        await Promise.all([
-          Dispute.countDocuments(),
-          Dispute.countDocuments({ status: "ESCALATED" }),
-          Dispute.countDocuments({
-            status: { $in: ["OPEN", "EVIDENCE_COLLECTION", "AI_ANALYZING", "VERDICT_READY"] },
-          }),
-          Dispute.countDocuments({ status: "RESOLVED" }),
-          Dispute.countDocuments({ status: "AWAITING_AI" }),
-          Dispute.countDocuments({ status: "CHALLENGED" }),
-        ]);
+      const [
+        totalUsers,
+        totalClients,
+        totalFreelancers,
+        totalContracts,
+        activeContracts,
+        totalDisputes,
+        escalated,
+        openDisputes,
+        resolved,
+        awaitingAI,
+        challenged,
+        recentDisputes,
+        recentUsers,
+      ] = await Promise.all([
+        User.countDocuments(),
+        User.countDocuments({ role: "CLIENT" }),
+        User.countDocuments({ role: "FREELANCER" }),
+        Contract.countDocuments(),
+        Contract.countDocuments({ status: "ACTIVE" }),
+        Dispute.countDocuments(),
+        Dispute.countDocuments({ status: "ESCALATED" }),
+        Dispute.countDocuments({
+          status: { $in: ["OPEN", "EVIDENCE_COLLECTION", "AI_ANALYZING", "VERDICT_READY"] },
+        }),
+        Dispute.countDocuments({ status: "RESOLVED" }),
+        Dispute.countDocuments({ status: "AWAITING_AI" }),
+        Dispute.countDocuments({ status: "CHALLENGED" }),
+        Dispute.find()
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .populate("contract", "title totalBudget")
+          .populate("raisedBy", "name email role"),
+        User.find()
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .select("name email role createdAt avatarUrl"),
+      ]);
+
+      const casesRequiringReview = escalated + challenged;
 
       res.json({
         success: true,
-        data: { totalDisputes, escalated, openDisputes, resolved, awaitingAI, challenged },
+        data: {
+          users: {
+            total: totalUsers,
+            clients: totalClients,
+            freelancers: totalFreelancers,
+          },
+          contracts: {
+            total: totalContracts,
+            active: activeContracts,
+          },
+          disputes: {
+            total: totalDisputes,
+            escalated,
+            openDisputes,
+            resolved,
+            awaitingAI,
+            challenged,
+            casesRequiringReview,
+          },
+          distribution: {
+            ESCALATED: escalated,
+            CHALLENGED: challenged,
+            OPEN: openDisputes,
+            RESOLVED: resolved,
+            AWAITING_AI: awaitingAI,
+          },
+          recentDisputes,
+          recentUsers,
+          // Legacy properties for backwards compatibility
+          totalDisputes,
+          escalated,
+          openDisputes,
+          resolved,
+          awaitingAI,
+          challenged,
+        },
       });
     } catch (error) {
       next(error);

@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { Verdict, Dispute, Contract, EscrowWallet, User } from "../models";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { getIO } from "../lib/socket";
+import { createInAppNotification } from "../services/notificationService";
 
 const router: any = Router();
 
@@ -108,6 +109,27 @@ router.post(
         disputeId: disputeIdStr,
         status: "RESOLVED",
       });
+
+      if (contract?.freelancerId) {
+        createInAppNotification({
+          recipientId: contract.freelancerId,
+          type: "DISPUTE_RESOLVED",
+          title: "Verdict Executed & Dispute Resolved",
+          message: `Verdict accepted: ₹${freelancerAmount.toLocaleString("en-IN")} credited to your wallet.`,
+          relatedEntity: { entityType: "Dispute", entityId: disputeIdStr },
+          targetRoute: `/disputes/${disputeIdStr}`,
+        }).catch(console.error);
+      }
+      if (contract?.clientId) {
+        createInAppNotification({
+          recipientId: contract.clientId,
+          type: "DISPUTE_RESOLVED",
+          title: "Verdict Executed & Dispute Resolved",
+          message: `Verdict accepted: ₹${clientRefund.toLocaleString("en-IN")} refunded to your wallet.`,
+          relatedEntity: { entityType: "Dispute", entityId: disputeIdStr },
+          targetRoute: `/disputes/${disputeIdStr}`,
+        }).catch(console.error);
+      }
 
       res.json({
         success: true,
