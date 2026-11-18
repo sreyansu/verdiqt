@@ -44,6 +44,43 @@ export const requireAdmin = (
   next();
 };
 
+/**
+ * Validates a Firebase ID Token without requiring the user document to exist in MongoDB.
+ * Required for registration, initial profile sync, and onboarding bootstrap endpoints.
+ */
+export const requireFirebaseToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ success: false, error: "Missing or invalid authorization header" });
+      return;
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(token);
+    } catch (err) {
+      res.status(401).json({ success: false, error: "Invalid Firebase ID token. " + String(err) });
+      return;
+    }
+
+    if (!decodedToken.email) {
+      res.status(400).json({ success: false, error: "Token missing email" });
+      return;
+    }
+
+    (req as any).firebaseUser = decodedToken;
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const requireAuthWithUser = async (
   req: Request,
   res: Response,
@@ -70,11 +107,35 @@ export const requireAuthWithUser = async (
       return;
     }
 
-    const user = await User.findOne({ email: decodedToken.email.toLowerCase() });
+    let user = await User.findOne({ email: decodedToken.email.toLowerCase() });
 
     if (!user) {
-      res.status(404).json({ success: false, error: "User not fully registered in database" });
-      return;
+      // If hitting /auth/me or bootstrapping, auto-provision from valid Firebase credentials
+      if (req.originalUrl?.includes("/api/auth/me")) {
+        try {
+          user = await User.findOneAndUpdate(
+            { email: decodedToken.email.toLowerCase() },
+            {
+              $setOnInsert: {
+                clerkId: decodedToken.uid,
+                email: decodedToken.email.toLowerCase(),
+                name: decodedToken.name || decodedToken.email.split("@")[0] || "User",
+                avatarUrl: decodedToken.picture || null,
+                role: "FREELANCER",
+                walletBalance: 0,
+              },
+            },
+            { upsert: true, new: true }
+          );
+        } catch {
+          user = await User.findOne({ email: decodedToken.email.toLowerCase() });
+        }
+      }
+
+      if (!user) {
+        res.status(404).json({ success: false, error: "User not fully registered in database" });
+        return;
+      }
     }
 
     (req as any).dbUser = user;

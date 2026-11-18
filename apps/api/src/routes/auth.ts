@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { User } from "../models/User";
 import * as admin from "firebase-admin";
-import { requireAuthWithUser } from "../middleware/firebaseAuth";
+import { requireAuthWithUser, requireFirebaseToken } from "../middleware/firebaseAuth";
 
 const router: any = Router();
 
@@ -75,7 +75,7 @@ router.post(
 // POST /api/auth/sync — Sync Firebase user to MongoDB
 router.post(
   "/sync",
-  requireAuthWithUser,
+  requireFirebaseToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const decodedUser = (req as any).firebaseUser;

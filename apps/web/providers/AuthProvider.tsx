@@ -65,15 +65,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (err: any) {
         if (err.response?.status === 404) {
           // Self-heal: User exists in Firebase but needs MongoDB doc sync
-          const { data } = await api.post("/auth/sync", {
-            name: firebaseUser.displayName,
-            email: firebaseUser.email,
-            avatarUrl: firebaseUser.photoURL,
-          }, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          setDbUser(data.data);
-          return data.data;
+          try {
+            const { data } = await api.post("/auth/sync", {
+              name: firebaseUser.displayName,
+              email: firebaseUser.email,
+              avatarUrl: firebaseUser.photoURL,
+            }, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            setDbUser(data.data);
+            return data.data;
+          } catch (syncErr) {
+            console.error("Auth provider self-heal /auth/sync error:", syncErr);
+          }
         } else {
           console.error("Auth provider fetch /auth/me error:", err);
         }
@@ -143,12 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await signInWithEmailAndPassword(auth, email.trim(), password);
       setUser(result.user);
-      const token = await result.user.getIdToken();
-      
-      const { data } = await api.get("/auth/me", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setDbUser(data.data);
+      await fetchDbUser(result.user);
     } catch (error) {
       console.error("Error signing in with email:", error);
       throw error;
