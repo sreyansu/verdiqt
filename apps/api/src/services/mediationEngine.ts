@@ -65,6 +65,59 @@ export interface MediationVerdict {
   juryPanelReport: string;
   quantumMeruitCalculation: QuantumMeruitCalculation;
   awardHash: string;
+  modelUsed?: string;
+}
+
+// ─── Gemini 4 Hydrogen Configuration with Medium Thinking ──────────────────────
+export const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-4-hydrogen";
+export const FALLBACK_GEMINI_MODEL = "gemini-2.5-flash";
+
+// Medium thinking budget (2,048 token budget for deliberate legal arbitration)
+export const MEDIUM_THINKING_CONFIG = {
+  thinkingBudget: 2048,
+};
+
+async function executeGeminiGeneration(
+  ai: GoogleGenAI,
+  model: string,
+  params: {
+    contents: string;
+    systemInstruction: string;
+    temperature?: number;
+    responseMimeType?: string;
+    responseSchema?: Schema;
+  }
+) {
+  const baseConfig: any = {
+    systemInstruction: params.systemInstruction,
+    temperature: params.temperature ?? 0.2,
+    thinkingConfig: MEDIUM_THINKING_CONFIG,
+  };
+  if (params.responseMimeType) baseConfig.responseMimeType = params.responseMimeType;
+  if (params.responseSchema) baseConfig.responseSchema = params.responseSchema;
+
+  try {
+    return await ai.models.generateContent({
+      model,
+      contents: params.contents,
+      config: baseConfig,
+    });
+  } catch (err: any) {
+    if (
+      model !== FALLBACK_GEMINI_MODEL &&
+      (err?.status === 404 || err?.message?.toLowerCase().includes("not found"))
+    ) {
+      console.warn(
+        `[MediationEngine] Model "${model}" not found for this API key. Gracefully falling back to "${FALLBACK_GEMINI_MODEL}".`
+      );
+      return await ai.models.generateContent({
+        model: FALLBACK_GEMINI_MODEL,
+        contents: params.contents,
+        config: baseConfig,
+      });
+    }
+    throw err;
+  }
 }
 
 // ─── Stage 1: Neuro-Symbolic Mathematical Quantum Meruit Calculator ───────────
@@ -182,13 +235,10 @@ ${evidenceList}
 Perform an impartial forensic evidence audit. Summarize which party's claims are corroborated by evidence.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model,
+    const response = await executeGeminiGeneration(ai, model, {
       contents: prompt,
-      config: {
-        systemInstruction: FORENSIC_AUDITOR_PROMPT,
-        temperature: 0.1,
-      },
+      systemInstruction: FORENSIC_AUDITOR_PROMPT,
+      temperature: 0.1,
     });
     return (
       response.text ||
@@ -229,13 +279,10 @@ FORENSIC AUDIT FINDINGS: "${forensicReport}"
 Draft the Client Advocate Prosecution Submission citing relevant statutory breaches.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model,
+    const response = await executeGeminiGeneration(ai, model, {
       contents: prompt,
-      config: {
-        systemInstruction: CLIENT_ADVOCATE_PROMPT,
-        temperature: 0.2,
-      },
+      systemInstruction: CLIENT_ADVOCATE_PROMPT,
+      temperature: 0.2,
     });
     return response.text || "Client Advocate claims material breach under ICA Section 37 and Section 73.";
   } catch (error) {
@@ -272,13 +319,10 @@ FORENSIC AUDIT FINDINGS: "${forensicReport}"
 Draft the Freelancer Defense Submission citing Quantum Meruit and scope creep protections.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model,
+    const response = await executeGeminiGeneration(ai, model, {
       contents: prompt,
-      config: {
-        systemInstruction: FREELANCER_DEFENSE_PROMPT,
-        temperature: 0.2,
-      },
+      systemInstruction: FREELANCER_DEFENSE_PROMPT,
+      temperature: 0.2,
     });
     return response.text || "Freelancer Defense asserts Quantum Meruit under ICA Section 70.";
   } catch (error) {
@@ -313,13 +357,10 @@ FORENSIC AUDIT FINDINGS: "${forensicReport}"
 Draft the Jury Panel's factual deliberation based purely on the evidence.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model,
+    const response = await executeGeminiGeneration(ai, model, {
       contents: prompt,
-      config: {
-        systemInstruction: JURY_PANEL_PROMPT,
-        temperature: 0.1,
-      },
+      systemInstruction: JURY_PANEL_PROMPT,
+      temperature: 0.1,
     });
     return response.text || "The Jury Panel finds the evidence inconclusive but notes the partial completion of milestones.";
   } catch (error) {
@@ -434,7 +475,7 @@ export async function runMediationEngine(
 
   // Initialize Gemini AI Client
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  const model = "gemini-2.5-flash";
+  const model = DEFAULT_GEMINI_MODEL;
 
   // Step 2 & 3: Run Multi-Agent Parallel Deliberation (Forensics, Client Advocate, Freelancer Defense, Jury Panel)
   const forensicReport = await runForensicAuditor(ai, model, input);
@@ -480,15 +521,12 @@ ${
 
 Synthesize all submissions. Adhere to statutory proportionality and the mathematical baseline. Return the structured binding award.`;
 
-  const response = await ai.models.generateContent({
-    model,
+  const response = await executeGeminiGeneration(ai, model, {
     contents: synthesisPrompt,
-    config: {
-      systemInstruction: CHIEF_ARBITRATOR_SYSTEM_PROMPT,
-      responseMimeType: "application/json",
-      responseSchema: responseSchema,
-      temperature: 0.2,
-    },
+    systemInstruction: CHIEF_ARBITRATOR_SYSTEM_PROMPT,
+    responseMimeType: "application/json",
+    responseSchema: responseSchema,
+    temperature: 0.2,
   });
 
   const rawText = response.text || "{}";
@@ -556,5 +594,6 @@ Synthesize all submissions. Adhere to statutory proportionality and the mathemat
     juryPanelReport,
     quantumMeruitCalculation: mathBounds,
     awardHash,
+    modelUsed: `${model} (Multi-Agent ODR with Medium Thinking)`,
   };
 }

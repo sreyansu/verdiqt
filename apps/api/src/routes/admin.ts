@@ -460,7 +460,7 @@ router.post(
           forensicAuditReport: verdict.forensicAuditReport,
           quantumMeruitCalculation: verdict.quantumMeruitCalculation as any,
           awardHash: verdict.awardHash,
-          modelUsed: "gemini-2.5-flash (Multi-Agent ODR)",
+          modelUsed: verdict.modelUsed || "gemini-4-hydrogen (Multi-Agent ODR with Medium Thinking)",
         });
 
         // Update dispute status
