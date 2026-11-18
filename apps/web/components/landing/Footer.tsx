@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Scale, ArrowRight, Shield, CheckCircle2, Heart } from "lucide-react";
 
 export function Footer() {
@@ -13,8 +14,14 @@ export function Footer() {
           {/* Brand & Mission column */}
           <div className="lg:col-span-2 space-y-4">
             <Link href="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-accent-primary flex items-center justify-center text-white shadow-xs">
-                <Scale className="w-4 h-4" />
+              <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-xs">
+                <Image
+                  src="/verdiqt-icon.png"
+                  alt="Verdiqt Logo"
+                  width={32}
+                  height={32}
+                  className="w-full h-full object-contain"
+                />
               </div>
               <span className="font-display font-bold text-xl text-slate-900 tracking-tight">
                 Verdiqt

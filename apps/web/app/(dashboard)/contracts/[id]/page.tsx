@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -288,8 +289,14 @@ export default function ContractDetailPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 border-b border-border pb-6">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-accent-primary flex items-center justify-center flex-shrink-0 shadow-lg glow-primary">
-              <Scale className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 shadow-lg glow-primary">
+              <Image
+                src="/verdiqt-icon.png"
+                alt="Verdiqt Logo"
+                width={48}
+                height={48}
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
               <h1 className="font-display text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-accent-primary to-accent-secondary">

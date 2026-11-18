@@ -3,6 +3,7 @@
 import { Scale, Bell, Menu, User, LogOut, Shield, Users } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -45,8 +46,14 @@ export default function Topbar() {
             </SheetTrigger>
             <SheetContent side="left" className="bg-white border-border w-72 p-0">
               <div className="flex items-center gap-3 px-5 py-6 border-b border-border">
-                <div className="w-9 h-9 rounded-lg bg-accent-primary flex items-center justify-center">
-                  <Scale className="w-5 h-5 text-white" />
+                <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0">
+                  <Image
+                    src="/verdiqt-icon.png"
+                    alt="Verdiqt Logo"
+                    width={36}
+                    height={36}
+                    className="w-full h-full object-contain"
+                  />
                 </div>
                 <span className="font-display font-bold text-xl gradient-text">Verdiqt</span>
               </div>
@@ -92,7 +99,15 @@ export default function Topbar() {
 
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2">
-            <Scale className="w-5 h-5 text-accent-primary" />
+            <div className="w-7 h-7 rounded-md overflow-hidden flex items-center justify-center flex-shrink-0">
+              <Image
+                src="/verdiqt-icon.png"
+                alt="Verdiqt Logo"
+                width={28}
+                height={28}
+                className="w-full h-full object-contain"
+              />
+            </div>
             <span className="font-display font-semibold gradient-text">Verdiqt</span>
           </div>
         </div>

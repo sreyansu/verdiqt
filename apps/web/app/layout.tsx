@@ -11,6 +11,11 @@ export const metadata: Metadata = {
   title: "Verdiqt — Freelance Escrow & AI Arbitration Platform",
   description:
     "Smart escrow and AI-powered dispute resolution for freelancers and clients. Fair. Fast. AI-Powered.",
+  icons: {
+    icon: "/verdiqt-icon.png",
+    shortcut: "/verdiqt-icon.png",
+    apple: "/verdiqt-icon.png",
+  },
   keywords: [
     "escrow",
     "freelance",

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Scale, ArrowRight, Menu, X, Play, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -59,8 +60,15 @@ export function Navbar({ onNavigate }: NavbarProps) {
             href="/"
             className="flex items-center gap-2.5 group transition-transform duration-200 hover:scale-[1.01]"
           >
-            <div className="w-9 h-9 rounded-xl bg-accent-primary flex items-center justify-center shadow-xs transition-colors group-hover:bg-accent-primary/95">
-              <Scale className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-xs transition-transform group-hover:scale-105">
+              <Image
+                src="/verdiqt-icon.png"
+                alt="Verdiqt Logo"
+                width={36}
+                height={36}
+                className="w-full h-full object-contain"
+                priority
+              />
             </div>
             <div className="flex items-baseline gap-1.5">
               <span className="font-display font-bold text-xl tracking-tight text-text-primary">

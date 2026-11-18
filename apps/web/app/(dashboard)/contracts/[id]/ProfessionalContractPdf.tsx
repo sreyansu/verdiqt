@@ -24,8 +24,9 @@ export function ProfessionalContractPdf({ contract }: { contract: any }) {
       {/* Header */}
       <div className="flex justify-between items-start border-b-2 border-gray-900 pb-6 mb-8">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-black flex items-center justify-center rounded">
-            <Scale className="w-6 h-6 text-white" />
+          <div className="w-12 h-12 flex items-center justify-center rounded overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/verdiqt-icon.png" alt="VERDIQT" className="w-full h-full object-contain" />
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">VERDIQT</h1>
