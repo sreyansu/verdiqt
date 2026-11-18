@@ -1,5 +1,12 @@
 import mongoose, { Document, Schema, Model, Types } from "mongoose";
 
+export interface IMilestoneSubmissionHistory {
+  submissionNote?: string | null;
+  submissionFiles?: any;
+  submittedAt?: Date | null;
+  rejectionReason?: string | null;
+}
+
 export interface IMilestone extends Document {
   id: string;
   contractId: Types.ObjectId;
@@ -12,6 +19,8 @@ export interface IMilestone extends Document {
   submissionNote?: string | null;
   submissionFiles?: any;
   submittedAt?: Date | null;
+  rejectionReason?: string | null;
+  submissionHistory?: IMilestoneSubmissionHistory[];
   createdAt: Date;
   updatedAt: Date;
   // Populated
@@ -40,6 +49,8 @@ const MilestoneSchema = new Schema<IMilestone>(
     submissionNote: { type: String, default: null },
     submissionFiles: { type: Schema.Types.Mixed, default: null },
     submittedAt: { type: Date, default: null },
+    rejectionReason: { type: String, default: null },
+    submissionHistory: { type: [Schema.Types.Mixed], default: [] },
   },
   {
     timestamps: true,

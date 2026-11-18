@@ -6,3 +6,5 @@ export * from "./Dispute";
 export * from "./Evidence";
 export * from "./Verdict";
 export * from "./Notification";
+export * from "./Conversation";
+export * from "./Message";

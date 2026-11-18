@@ -135,6 +135,7 @@ export interface IUser extends Document {
   accountType?: "INDIVIDUAL" | "ORGANIZATION" | null;
   bio?: string | null;
   languages: ILanguage[];
+  isDiscoverable?: boolean;
 
   // Freelancer Professional Expertise
   professionalTitle?: string | null;
@@ -342,6 +343,7 @@ const UserSchema = new Schema<IUser>(
     accountType: { type: String, enum: ["INDIVIDUAL", "ORGANIZATION", null], default: "INDIVIDUAL" },
     bio: { type: String, default: null },
     languages: { type: [LanguageSchema], default: [] },
+    isDiscoverable: { type: Boolean, default: true, index: true },
 
     // Freelancer Expertise
     professionalTitle: { type: String, default: null },

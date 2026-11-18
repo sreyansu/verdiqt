@@ -13,6 +13,7 @@ import {
   LogOut,
   Shield,
   Users,
+  MessageSquare,
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -30,7 +31,9 @@ const adminNavItems = [
 
 const userNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/freelancers", label: "Find Freelancers", icon: Users },
   { href: "/contracts", label: "Contracts", icon: FileText },
+  { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/disputes", label: "Disputes", icon: Scale },
   { href: "/wallet", label: "Wallet", icon: Wallet },
   { href: "/profile", label: "Profile", icon: User },
@@ -42,7 +45,13 @@ export default function Sidebar() {
   const { dbUser } = useUserStore();
   const { signOut } = useAuth();
 
-  const navItems = dbUser?.role === "ADMIN" ? adminNavItems : userNavItems;
+  // Only Clients (and Admins) see "Find Freelancers"; Freelancers manage their own contracts & work
+  const navItems =
+    dbUser?.role === "ADMIN"
+      ? adminNavItems
+      : dbUser?.role === "FREELANCER"
+      ? userNavItems.filter((item) => item.href !== "/freelancers")
+      : userNavItems;
 
   return (
     <motion.aside

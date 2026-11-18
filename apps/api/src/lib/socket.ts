@@ -52,6 +52,33 @@ export function initSocket(httpServer: HttpServer) {
       socket.leave(`dispute:${disputeId}`);
     });
 
+    // Join conversation room for realtime contract messaging
+    socket.on("joinConversation", (conversationId: string) => {
+      if (conversationId) {
+        socket.join(`conversation:${conversationId}`);
+        console.log(`[Socket] ${socket.id} joined conversation:${conversationId}`);
+      }
+    });
+
+    socket.on("leaveConversation", (conversationId: string) => {
+      if (conversationId) {
+        socket.leave(`conversation:${conversationId}`);
+      }
+    });
+
+    // Realtime typing indicators
+    socket.on("typing:start", (data: { conversationId: string; userId: string; userName: string }) => {
+      if (data?.conversationId) {
+        socket.to(`conversation:${data.conversationId}`).emit("typing:active", data);
+      }
+    });
+
+    socket.on("typing:stop", (data: { conversationId: string; userId: string }) => {
+      if (data?.conversationId) {
+        socket.to(`conversation:${data.conversationId}`).emit("typing:inactive", data);
+      }
+    });
+
     socket.on("disconnect", () => {
       console.log(`[Socket] Client disconnected: ${socket.id}`);
     });

@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
+import mongoose from "mongoose";
 import { z } from "zod";
 import { Contract, Milestone, EscrowWallet, User } from "../models";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
@@ -20,7 +21,8 @@ const createContractSchema = z.object({
   currency: z.string().default("INR"),
   startDate: isoDatetime,
   endDate: isoDatetime,
-  freelancerEmail: z.string().email(),
+  freelancerId: z.string().optional(),
+  freelancerEmail: z.string().email().optional(),
   milestones: z
     .array(
       z.object({
@@ -31,6 +33,9 @@ const createContractSchema = z.object({
       })
     )
     .min(1),
+}).refine((data) => data.freelancerId || data.freelancerEmail, {
+  message: "Either freelancerId or freelancerEmail must be provided",
+  path: ["freelancerEmail"],
 });
 
 // GET /api/contracts — List contracts for authenticated user
@@ -72,10 +77,31 @@ router.post(
         return;
       }
 
-      const { title, description, totalAmount, currency, startDate, endDate, freelancerEmail, milestones } = req.body;
+      const {
+        title,
+        description,
+        totalAmount,
+        currency,
+        startDate,
+        endDate,
+        freelancerId,
+        freelancerEmail,
+        milestones,
+      } = req.body;
 
-      // Find freelancer
-      const freelancer = await User.findOne({ email: freelancerEmail.toLowerCase() });
+      // Find freelancer by internal ID or fallback email
+      let freelancer = null;
+      if (freelancerId) {
+        if (mongoose.Types.ObjectId.isValid(freelancerId)) {
+          freelancer = await User.findById(freelancerId);
+        }
+        if (!freelancer) {
+          freelancer = await User.findOne({ clerkId: freelancerId });
+        }
+      }
+      if (!freelancer && freelancerEmail) {
+        freelancer = await User.findOne({ email: freelancerEmail.toLowerCase() });
+      }
 
       if (!freelancer) {
         res.status(404).json({ success: false, error: "Freelancer not found" });
@@ -93,7 +119,7 @@ router.post(
       }
 
       const userId = user._id || user.id;
-      const freelancerId = freelancer._id || freelancer.id;
+      const targetFreelancerId = freelancer._id || freelancer.id;
 
       const contract = await Contract.create({
         title,
@@ -103,7 +129,7 @@ router.post(
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         clientId: userId,
-        freelancerId: freelancerId,
+        freelancerId: targetFreelancerId,
       });
 
       if (milestones && milestones.length > 0) {

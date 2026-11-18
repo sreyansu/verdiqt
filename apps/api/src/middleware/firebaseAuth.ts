@@ -55,12 +55,19 @@ export const requireFirebaseToken = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      res.status(401).json({ success: false, error: "Missing or invalid authorization header" });
+    let token: string | undefined;
+
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.split(" ")[1];
+    } else if (typeof req.query.token === "string" && req.query.token.trim()) {
+      token = req.query.token.trim();
+    }
+
+    if (!token) {
+      res.status(401).json({ success: false, error: "Missing or invalid authorization credentials" });
       return;
     }
 
-    const token = authHeader.split(" ")[1];
     let decodedToken;
     try {
       decodedToken = await admin.auth().verifyIdToken(token);
@@ -88,12 +95,19 @@ export const requireAuthWithUser = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      res.status(401).json({ success: false, error: "Missing or invalid authorization header" });
+    let token: string | undefined;
+
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.split(" ")[1];
+    } else if (typeof req.query.token === "string" && req.query.token.trim()) {
+      token = req.query.token.trim();
+    }
+
+    if (!token) {
+      res.status(401).json({ success: false, error: "Missing or invalid authorization credentials" });
       return;
     }
 
-    const token = authHeader.split(" ")[1];
     let decodedToken;
     try {
       decodedToken = await admin.auth().verifyIdToken(token);

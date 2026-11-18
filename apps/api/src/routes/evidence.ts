@@ -28,19 +28,19 @@ const upload = multer({
   },
 });
 
-// POST /api/evidence/upload — Upload file to Cloudinary
+// POST /api/evidence/upload — Upload single or multiple files to Cloudinary concurrently
 router.post(
   "/upload",
   requireAuthWithUser,
-  upload.single("file"),
+  upload.any(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).dbUser;
       const userId = user._id || user.id;
-      const file = req.file;
+      const rawFiles = (req.files as Express.Multer.File[]) || (req.file ? [req.file] : []);
       const { disputeId, description } = req.body;
 
-      if (!file) {
+      if (!rawFiles || rawFiles.length === 0) {
         res.status(400).json({ success: false, error: "No file provided" });
         return;
       }
@@ -61,40 +61,51 @@ router.post(
         return;
       }
 
-      // Sanitize filename for Cloudinary public_id (only alphanumeric, _, -, .)
-      const sanitizedName = file.originalname
-        .replace(/[^a-zA-Z0-9._-]/g, "_") // Replace special chars with underscore
-        .replace(/_{2,}/g, "_"); // Replace multiple underscores with single
+      // Upload all files to Cloudinary concurrently in parallel
+      const uploadPromises = rawFiles.map(async (file, idx) => {
+        // Sanitize filename for Cloudinary public_id (only alphanumeric, _, -, .)
+        const sanitizedName = file.originalname
+          .replace(/[^a-zA-Z0-9._-]/g, "_")
+          .replace(/_{2,}/g, "_");
 
-      // Upload to Cloudinary
-      const uploadResult = await new Promise<any>((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          {
-            folder: `verdiqt/evidence/${disputeId}`,
-            resource_type: "auto",
-            public_id: `${Date.now()}_${sanitizedName}`,
-          },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
-          }
-        );
-        stream.end(file.buffer);
+        const uploadResult = await new Promise<any>((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              folder: `verdiqt/evidence/${disputeId}`,
+              resource_type: "auto",
+              public_id: `${Date.now()}_${idx}_${sanitizedName}`,
+            },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          );
+          stream.end(file.buffer);
+        });
+
+        // Save evidence record in DB
+        const evidence = await Evidence.create({
+          disputeId,
+          uploadedById: userId,
+          fileName: file.originalname,
+          fileUrl: uploadResult.secure_url,
+          fileType: file.mimetype,
+          description: description || undefined,
+        });
+
+        return evidence;
       });
 
-      // Save record
-      const evidence = await Evidence.create({
-        disputeId,
-        uploadedById: userId,
-        fileName: file.originalname,
-        fileUrl: uploadResult.secure_url,
-        fileType: file.mimetype,
-        description,
+      const createdEvidence = await Promise.all(uploadPromises);
+      const populated = await Evidence.find({
+        _id: { $in: createdEvidence.map((e) => e._id) },
+      }).populate("uploadedBy");
+
+      res.status(201).json({
+        success: true,
+        data: populated.length === 1 ? populated[0] : populated,
+        items: populated,
       });
-
-      const populatedEvidence = await Evidence.findById(evidence._id).populate("uploadedBy");
-
-      res.status(201).json({ success: true, data: populatedEvidence });
     } catch (error) {
       next(error);
     }

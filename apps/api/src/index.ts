@@ -26,6 +26,7 @@ import verdictRoutes from "./routes/verdicts";
 import adminRoutes from "./routes/admin";
 import notificationRoutes from "./routes/notifications";
 import userRoutes from "./routes/users";
+import messageRoutes from "./routes/messages";
 
 const app: any = express();
 const httpServer = createServer(app);
@@ -102,6 +103,7 @@ app.use("/api/verdicts", verdictRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/messages", messageRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);

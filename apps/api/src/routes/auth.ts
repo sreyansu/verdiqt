@@ -160,6 +160,7 @@ router.put(
         updateFields.accountType = body.accountType;
       }
       if (body.bio !== undefined) updateFields.bio = body.bio ? String(body.bio).trim() : null;
+      if (body.isDiscoverable !== undefined) updateFields.isDiscoverable = Boolean(body.isDiscoverable);
 
       // Languages array
       if (Array.isArray(body.languages)) {

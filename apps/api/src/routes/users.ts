@@ -56,6 +56,7 @@ function sanitizePublicProfile(user: IUser) {
     base.education = user.education || [];
     base.certifications = user.certifications || [];
     base.availability = user.workPreferences?.availability || user.availability || "Available";
+    base.isDiscoverable = user.isDiscoverable !== false;
 
     base.portfolio = (user.portfolio || []).map((item) => ({
       id: item.id,
@@ -156,27 +157,157 @@ router.get(
   }
 );
 
-// GET /api/users/freelancers — Browse/search public freelancer directory
+// GET /api/users/freelancers/facets — Get filter options (categories, top skills, experience levels)
+router.get("/freelancers/facets", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const freelancers = await User.find({ role: "FREELANCER", isDiscoverable: { $ne: false } })
+      .select("primaryCategory skills experienceLevel country languages")
+      .lean();
+
+    const categorySet = new Set<string>();
+    const skillCountMap = new Map<string, number>();
+    const countrySet = new Set<string>();
+
+    freelancers.forEach((f: any) => {
+      if (f.primaryCategory) categorySet.add(f.primaryCategory.trim());
+      if (Array.isArray(f.skills)) {
+        f.skills.forEach((s: string) => {
+          if (s && s.trim()) {
+            const clean = s.trim();
+            skillCountMap.set(clean, (skillCountMap.get(clean) || 0) + 1);
+          }
+        });
+      }
+      if (f.country && f.country.trim()) countrySet.add(f.country.trim());
+    });
+
+    const topSkills = Array.from(skillCountMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 30)
+      .map(([skill]) => skill);
+
+    res.json({
+      success: true,
+      data: {
+        categories: Array.from(categorySet).sort(),
+        skills: topSkills,
+        experienceLevels: ["Beginner", "Intermediate", "Experienced", "Expert"],
+        availabilityOptions: ["Available", "Busy", "Unavailable"],
+        countries: Array.from(countrySet).sort(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/users/freelancers — Browse & search public freelancer marketplace directory
 router.get(
   "/freelancers",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { category, skill, limit = "20", page = "1" } = req.query;
-      const query: any = { role: "FREELANCER" };
+      const {
+        q,
+        category,
+        skill,
+        experienceLevel,
+        availability,
+        country,
+        language,
+        sort = "recent",
+        limit = "12",
+        page = "1",
+      } = req.query;
 
-      if (category && typeof category === "string") {
-        query.primaryCategory = new RegExp(category.trim(), "i");
-      }
-      if (skill && typeof skill === "string") {
-        query.skills = { $in: [new RegExp(skill.trim(), "i")] };
+      // Base query: Must be Freelancer and discoverable
+      const query: any = {
+        role: "FREELANCER",
+        isDiscoverable: { $ne: false },
+      };
+
+      // Full text / keyword search
+      if (q && typeof q === "string" && q.trim()) {
+        const keyword = q.trim();
+        const regex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        query.$or = [
+          { name: regex },
+          { displayName: regex },
+          { professionalTitle: regex },
+          { primaryCategory: regex },
+          { specialization: regex },
+          { skills: { $in: [regex] } },
+          { industriesServed: { $in: [regex] } },
+          { bio: regex },
+          { "portfolio.title": regex },
+          { "portfolio.technologies": { $in: [regex] } },
+        ];
       }
 
-      const pageSize = Math.min(Math.max(Number(limit) || 20, 1), 50);
+      // Specific Category filter
+      if (category && typeof category === "string" && category.trim()) {
+        const catRegex = new RegExp(category.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: [{ primaryCategory: catRegex }, { specialization: catRegex }],
+        });
+      }
+
+      // Specific Skill filter
+      if (skill && typeof skill === "string" && skill.trim()) {
+        const skillRegex = new RegExp(skill.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        query.skills = { $in: [skillRegex] };
+      }
+
+      // Experience Level filter
+      if (experienceLevel && typeof experienceLevel === "string" && experienceLevel.trim()) {
+        query.experienceLevel = new RegExp(`^${experienceLevel.trim()}$`, "i");
+      }
+
+      // Availability filter
+      if (availability && typeof availability === "string" && availability.trim()) {
+        const availRegex = new RegExp(`^${availability.trim()}$`, "i");
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: [
+            { "workPreferences.availability": availRegex },
+            { availability: availRegex },
+          ],
+        });
+      }
+
+      // Country filter
+      if (country && typeof country === "string" && country.trim()) {
+        query.country = new RegExp(`^${country.trim()}$`, "i");
+      }
+
+      // Language filter
+      if (language && typeof language === "string" && language.trim()) {
+        const langRegex = new RegExp(language.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: [
+            { preferredLanguage: langRegex },
+            { "languages.language": langRegex },
+          ],
+        });
+      }
+
+      // Sorting
+      let sortDoc: any = { updatedAt: -1 };
+      if (sort === "experience_desc") {
+        sortDoc = { experienceYears: -1, updatedAt: -1 };
+      } else if (sort === "name_asc") {
+        sortDoc = { name: 1 };
+      } else if (sort === "recent") {
+        sortDoc = { updatedAt: -1 };
+      }
+
+      const pageSize = Math.min(Math.max(Number(limit) || 12, 1), 50);
       const pageNum = Math.max(Number(page) || 1, 1);
       const skip = (pageNum - 1) * pageSize;
 
       const [users, total] = await Promise.all([
-        User.find(query).sort({ updatedAt: -1 }).skip(skip).limit(pageSize),
+        User.find(query).sort(sortDoc).skip(skip).limit(pageSize),
         User.countDocuments(query),
       ]);
 

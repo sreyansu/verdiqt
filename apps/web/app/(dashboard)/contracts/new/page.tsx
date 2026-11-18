@@ -38,6 +38,7 @@ export default function NewContractPage() {
   const { dbUser } = useUserStore();
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [invitedFreelancer, setInvitedFreelancer] = useState<any | null>(null);
 
   useEffect(() => {
     if (dbUser && dbUser.role !== "CLIENT") {
@@ -65,8 +66,11 @@ export default function NewContractPage() {
       const freelancerId = params.get("freelancerId");
       if (freelancerId) {
         api.get(`/users/${freelancerId}/profile`).then(({ data }) => {
-          if (data.data?.email) {
-            setForm((prev) => ({ ...prev, freelancerEmail: data.data.email }));
+          if (data.data) {
+            setInvitedFreelancer(data.data);
+            if (data.data.email) {
+              setForm((prev) => ({ ...prev, freelancerEmail: data.data.email }));
+            }
           }
         }).catch(() => {});
       }
@@ -121,6 +125,8 @@ export default function NewContractPage() {
     try {
       await api.post("/contracts", {
         ...form,
+        freelancerId: invitedFreelancer?.id || undefined,
+        freelancerEmail: form.freelancerEmail?.trim() || undefined,
         totalAmount,
         startDate: new Date(form.startDate).toISOString(),
         endDate: new Date(form.endDate).toISOString(),
@@ -213,6 +219,34 @@ export default function NewContractPage() {
             exit={{ opacity: 0, x: -20 }}
           >
             <Card className="glass-elevated p-6 rounded-xl border-border space-y-4">
+              {invitedFreelancer && (
+                <div className="p-4 bg-accent-primary/5 border border-accent-primary/20 rounded-xl flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-accent-primary/10 border border-accent-primary/20 overflow-hidden flex items-center justify-center font-bold text-accent-primary flex-shrink-0">
+                      {invitedFreelancer.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={invitedFreelancer.avatarUrl} alt={invitedFreelancer.name} className="w-full h-full object-cover" />
+                      ) : (
+                        invitedFreelancer.name?.charAt(0) || "F"
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs uppercase font-bold tracking-wider text-accent-primary">Direct Invitation To:</span>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Verified Professional
+                        </span>
+                      </div>
+                      <p className="font-semibold text-text-primary text-sm mt-0.5">{invitedFreelancer.name}</p>
+                      <p className="text-xs text-text-secondary">{invitedFreelancer.professionalTitle || "Freelancer"}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-text-secondary font-mono hidden sm:inline">
+                    ID: {invitedFreelancer.id?.substring(0, 10)}...
+                  </span>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Contract Title</Label>
                 <Input

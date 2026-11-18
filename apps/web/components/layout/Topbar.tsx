@@ -1,6 +1,6 @@
 "use client";
 
-import { Scale, Menu, User, LogOut, Shield, Users } from "lucide-react";
+import { Scale, Menu, User, LogOut, Shield, Users, MessageSquare } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import Link from "next/link";
 import Image from "next/image";
@@ -17,7 +17,9 @@ import { ProfileDropdown } from "@/components/layout/ProfileDropdown";
 
 const userNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/freelancers", label: "Find Freelancers", icon: Users },
   { href: "/contracts", label: "Contracts", icon: FileText },
+  { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/disputes", label: "Disputes", icon: Scale },
   { href: "/wallet", label: "Wallet", icon: Wallet },
   { href: "/profile", label: "Profile", icon: User },
@@ -35,7 +37,13 @@ export default function Topbar() {
   const { dbUser } = useUserStore();
   const { signOut } = useAuth();
 
-  const navItems = dbUser?.role === "ADMIN" ? adminNavItems : userNavItems;
+  // Only Clients (and Admins) see "Find Freelancers"; Freelancers manage their own contracts & work
+  const navItems =
+    dbUser?.role === "ADMIN"
+      ? adminNavItems
+      : dbUser?.role === "FREELANCER"
+      ? userNavItems.filter((item) => item.href !== "/freelancers")
+      : userNavItems;
 
   return (
     <header className="sticky top-0 z-40 glass border-b border-border px-4 lg:px-6 py-3 print:hidden">
