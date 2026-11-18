@@ -7,13 +7,22 @@ export function initSocket(httpServer: HttpServer) {
   const origins = [
     "http://localhost:3000",
     "http://localhost:3001",
+    "http://localhost:4000",
     process.env.NEXT_PUBLIC_APP_URL,
+    process.env.FRONTEND_URL,
   ].filter(Boolean) as string[];
 
   io = new SocketIOServer(httpServer, {
     cors: {
-      origin: origins,
+      origin: (origin, callback) => {
+        if (!origin || origins.some(o => origin === o || origin.startsWith(o)) || origin.endsWith(".vercel.app")) {
+          callback(null, true);
+        } else {
+          callback(null, false);
+        }
+      },
       methods: ["GET", "POST"],
+      credentials: true,
     },
   });
 

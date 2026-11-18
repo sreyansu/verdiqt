@@ -3,7 +3,23 @@ import mongoose from "mongoose";
 import { Notification } from "../models/Notification";
 import { getIO } from "../lib/socket";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendClient: Resend | null = null;
+function getResend(): Resend | null {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey || apiKey === "re_123" || apiKey.trim() === "") {
+    return null;
+  }
+  if (!resendClient) {
+    try {
+      resendClient = new Resend(apiKey);
+    } catch (err) {
+      console.warn("[Resend] Failed to initialize Resend client:", err);
+      return null;
+    }
+  }
+  return resendClient;
+}
+
 const FROM_EMAIL = "Verdiqt <notifications@verdiqt.app>";
 
 export interface CreateNotificationParams {
@@ -54,8 +70,13 @@ export async function sendDisputeRaisedEmail(
   disputeTitle: string,
   contractTitle: string
 ) {
+  const client = getResend();
+  if (!client) {
+    console.info("[Notification] RESEND_API_KEY not configured. Skipping dispute email to:", toEmail);
+    return;
+  }
   try {
-    await resend.emails.send({
+    await client.emails.send({
       from: FROM_EMAIL,
       to: toEmail,
       subject: `⚖️ Dispute Raised: ${disputeTitle}`,
@@ -82,8 +103,13 @@ export async function sendVerdictReadyEmail(
   disputeTitle: string,
   confidenceScore: number
 ) {
+  const client = getResend();
+  if (!client) {
+    console.info("[Notification] RESEND_API_KEY not configured. Skipping verdict email to:", toEmail);
+    return;
+  }
   try {
-    await resend.emails.send({
+    await client.emails.send({
       from: FROM_EMAIL,
       to: toEmail,
       subject: `✅ Verdict Ready: ${disputeTitle}`,
@@ -110,8 +136,13 @@ export async function sendEscrowReleasedEmail(
   amount: number,
   contractTitle: string
 ) {
+  const client = getResend();
+  if (!client) {
+    console.info("[Notification] RESEND_API_KEY not configured. Skipping escrow email to:", toEmail);
+    return;
+  }
   try {
-    await resend.emails.send({
+    await client.emails.send({
       from: FROM_EMAIL,
       to: toEmail,
       subject: `💰 Funds Released: ${contractTitle}`,

@@ -58,6 +58,21 @@ export default function NewContractPage() {
     { title: "", description: "", amount: "", dueDate: "" }
   ]);
 
+  // Pre-fill freelancer if freelancerId passed in URL query
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const freelancerId = params.get("freelancerId");
+      if (freelancerId) {
+        api.get(`/users/${freelancerId}/profile`).then(({ data }) => {
+          if (data.data?.email) {
+            setForm((prev) => ({ ...prev, freelancerEmail: data.data.email }));
+          }
+        }).catch(() => {});
+      }
+    }
+  }, [api]);
+
   const addMilestone = () => {
     setMilestones([...milestones, { title: "", description: "", amount: "", dueDate: "" }]);
   };
@@ -208,7 +223,23 @@ export default function NewContractPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Description</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Description</Label>
+                  {dbUser?.contractExpectations && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const exp = dbUser.contractExpectations;
+                        const appendText = `\n\nDelivery Standards (Agreed):\n• Review Period: ${exp?.standardReviewPeriod || "3 business days"}\n• Feedback Turnaround: ${exp?.expectedTurnaroundTime || "Within 24 hours"}\n• Revision Rounds: ${exp?.preferredRevisionRounds || "2 rounds"}\n• Deliverable Formats: ${(exp?.preferredDeliverableFormats || []).join(", ") || "GitHub Repository"}\n• Dispute Escalation: ${exp?.preferredEscalationMethod || "Direct negotiation before AI tribunal"}`;
+                        setForm((prev) => ({ ...prev, description: (prev.description + appendText).trim() }));
+                      }}
+                      className="text-xs text-accent-primary hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                    >
+                      <FileText className="w-3 h-3 text-accent-primary" />
+                      <span>Append Standard Delivery Terms</span>
+                    </button>
+                  )}
+                </div>
                 <Textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}

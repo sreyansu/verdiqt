@@ -25,6 +25,7 @@ import evidenceRoutes from "./routes/evidence";
 import verdictRoutes from "./routes/verdicts";
 import adminRoutes from "./routes/admin";
 import notificationRoutes from "./routes/notifications";
+import userRoutes from "./routes/users";
 
 const app: any = express();
 const httpServer = createServer(app);
@@ -38,6 +39,7 @@ initSocket(httpServer);
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
+  "http://localhost:4000",
   process.env.NEXT_PUBLIC_APP_URL,
   process.env.FRONTEND_URL,
 ].filter(Boolean).map(url => String(url).replace(/\/$/, "")) as string[];
@@ -46,14 +48,27 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, curl, health checks)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.some((allowed) => origin.startsWith(allowed) || origin === allowed)) {
-      callback(null, true);
-    } else {
-      console.warn(`[CORS] Blocked origin: ${origin}`);
-      callback(new Error("Not allowed by CORS"));
+    
+    // Explicitly allowed origins
+    if (allowedOrigins.some((allowed) => origin === allowed || origin.startsWith(allowed))) {
+      return callback(null, true);
     }
+    
+    // Allow all Vercel deployment domains (production & preview branches)
+    if (origin.endsWith(".vercel.app") || /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin)) {
+      return callback(null, true);
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      return callback(null, true);
+    }
+
+    console.warn(`[CORS] Blocked origin: ${origin}`);
+    callback(null, false);
   },
   credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -86,6 +101,7 @@ app.use("/api/evidence", evidenceRoutes);
 app.use("/api/verdicts", verdictRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/users", userRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);

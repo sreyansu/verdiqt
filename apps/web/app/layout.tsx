@@ -12,9 +12,14 @@ export const metadata: Metadata = {
   description:
     "Smart escrow and AI-powered dispute resolution for freelancers and clients. Fair. Fast. AI-Powered.",
   icons: {
-    icon: "/verdiqt-icon.png",
-    shortcut: "/verdiqt-icon.png",
-    apple: "/verdiqt-icon.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/verdiqt-icon.png", type: "image/png", sizes: "500x500" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
   keywords: [
     "escrow",

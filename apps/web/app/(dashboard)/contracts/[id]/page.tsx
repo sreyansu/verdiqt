@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ import {
   XCircle,
   Download,
   Scale,
+  ExternalLink,
 } from "lucide-react";
 import { toCanvas } from "html-to-image";
 import jsPDF from "jspdf";
@@ -341,16 +343,44 @@ export default function ContractDetailPage() {
         </Card>
         <Card className="glass-elevated p-4 rounded-xl border-border flex flex-col justify-between">
           <div>
-            <User className="w-4 h-4 text-text-secondary mb-1" />
-            <p className="font-medium">{contract.client?.name}</p>
+            <div className="flex items-center justify-between mb-1">
+              <User className="w-4 h-4 text-text-secondary" />
+              {contract.clientId && (
+                <Link
+                  href={`/profile/${contract.clientId}`}
+                  className="text-[11px] text-accent-primary hover:underline flex items-center gap-0.5"
+                >
+                  <span>Profile</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </Link>
+              )}
+            </div>
+            <p className="font-semibold text-sm text-text-primary">{contract.client?.name}</p>
+            {contract.client?.company && (
+              <p className="text-xs text-accent-secondary font-medium truncate">{contract.client.company}</p>
+            )}
             <p className="text-xs text-text-secondary truncate">{contract.client?.email}</p>
           </div>
           <Badge className="mt-3 w-fit bg-accent-primary/10 text-accent-primary border border-accent-primary/20 text-[10px] uppercase">Client</Badge>
         </Card>
         <Card className="glass-elevated p-4 rounded-xl border-border flex flex-col justify-between">
           <div>
-            <User className="w-4 h-4 text-text-secondary mb-1" />
-            <p className="font-medium">{contract.freelancer?.name}</p>
+            <div className="flex items-center justify-between mb-1">
+              <User className="w-4 h-4 text-text-secondary" />
+              {contract.freelancerId && (
+                <Link
+                  href={`/profile/${contract.freelancerId}`}
+                  className="text-[11px] text-accent-secondary hover:underline flex items-center gap-0.5"
+                >
+                  <span>Profile</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </Link>
+              )}
+            </div>
+            <p className="font-semibold text-sm text-text-primary">{contract.freelancer?.name}</p>
+            {contract.freelancer?.professionalTitle && (
+              <p className="text-xs text-accent-secondary font-medium truncate">{contract.freelancer.professionalTitle}</p>
+            )}
             <p className="text-xs text-text-secondary truncate">{contract.freelancer?.email}</p>
           </div>
           <Badge className="mt-3 w-fit bg-accent-secondary/10 text-accent-secondary border border-accent-secondary/20 text-[10px] uppercase">Freelancer</Badge>
