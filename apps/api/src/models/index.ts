@@ -5,3 +5,4 @@ export * from "./EscrowWallet";
 export * from "./Dispute";
 export * from "./Evidence";
 export * from "./Verdict";
+export * from "./Notification";

@@ -3,39 +3,41 @@
 import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { Loader2, Mail, Lock } from "lucide-react";
+import { Loader2, Mail, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, AlertCircle, KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Scale, ArrowLeft } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function SignInPage() {
-  const { signInWithGoogle, signInWithEmail, user, loading } = useAuth();
+  const { signInWithEmail, sendPasswordReset, user, loading } = useAuth();
   const router = useRouter();
   const [isSigningIn, setIsSigningIn] = useState(false);
   
   // Form State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Forgot Password Dialog State
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && !loading) {
       router.push("/dashboard");
     }
   }, [user, loading, router]);
-
-  const handleGoogleSignIn = async () => {
-    setIsSigningIn(true);
-    setError(null);
-    try {
-      await signInWithGoogle("CLIENT"); // Default to client, or freelancer if returning. The sync logic handles returning users.
-    } catch (e: any) {
-      console.error(e);
-      setError(e.message || "Failed to sign in with Google");
-      setIsSigningIn(false);
-    }
-  };
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,20 +50,53 @@ export default function SignInPage() {
     setError(null);
     try {
       await signInWithEmail(email, password);
+      router.push("/dashboard");
     } catch (e: any) {
       console.error(e);
-      setError(e.message || "Invalid email or password.");
+      let errMsg = "Invalid email or password.";
+      if (e.code === "auth/invalid-credential" || e.code === "auth/user-not-found" || e.code === "auth/wrong-password") {
+        errMsg = "Invalid email or password. Please verify your credentials.";
+      } else if (e.code === "auth/too-many-requests") {
+        errMsg = "Too many failed attempts. Please reset your password or try again later.";
+      } else if (e.message) {
+        errMsg = e.message;
+      }
+      setError(errMsg);
       setIsSigningIn(false);
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail || !resetEmail.includes("@")) {
+      setResetError("Please enter a valid email address.");
+      return;
+    }
+
+    setResetLoading(true);
+    setResetError(null);
+    try {
+      await sendPasswordReset(resetEmail);
+      setResetSuccess(true);
+    } catch (err: any) {
+      console.error(err);
+      // For security, still show confirmation or clear error if invalid email format
+      setResetError(err.message || "Failed to send password reset email.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-primary relative overflow-y-auto py-12">
-      <Link href="/" className="absolute top-6 left-6 md:top-10 md:left-10 flex items-center text-text-secondary hover:text-text-primary transition-colors text-sm font-medium bg-bg-elevated/50 px-4 py-2 rounded-full border border-border backdrop-blur-sm z-10">
+    <div className="min-h-screen flex items-center justify-center bg-bg-primary relative overflow-y-auto py-12 px-4">
+      <Link
+        href="/"
+        className="absolute top-6 left-6 md:top-10 md:left-10 flex items-center text-text-secondary hover:text-text-primary transition-colors text-sm font-medium bg-bg-elevated/50 px-4 py-2 rounded-full border border-border backdrop-blur-sm z-10"
+      >
         <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
       </Link>
 
-      <div className="w-full max-w-md p-8 glass-elevated rounded-2xl border border-border">
+      <div className="w-full max-w-md p-8 glass-elevated rounded-2xl border border-border shadow-xl">
         <div className="flex justify-center items-center gap-3 mb-8">
           <div className="w-11 h-11 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0">
             <Image
@@ -76,18 +111,25 @@ export default function SignInPage() {
           <span className="font-display font-bold text-2xl gradient-text">Verdiqt</span>
         </div>
         
-        <h1 className="font-display text-2xl font-semibold mb-2 text-center text-text-primary">Welcome Back</h1>
-        <p className="text-text-secondary text-center mb-8">Sign in to your Verdiqt account</p>
+        <h1 className="font-display text-2xl font-semibold mb-2 text-center text-text-primary">
+          Welcome Back
+        </h1>
+        <p className="text-text-secondary text-sm text-center mb-8">
+          Sign in with your email and password to access your contracts and disputes
+        </p>
 
         {error && (
-          <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-sm rounded-lg text-center">
-            {error}
+          <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-sm rounded-lg flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleEmailSignIn} className="space-y-4 mb-6">
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-text-primary">Email Address</Label>
+        <form onSubmit={handleEmailSignIn} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+              Email Address
+            </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
               <input 
@@ -97,64 +139,68 @@ export default function SignInPage() {
                 placeholder="you@example.com"
                 className="w-full bg-bg-primary border border-border rounded-lg pl-10 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent-primary focus:outline-none transition-colors"
                 required
+                autoComplete="email"
               />
             </div>
           </div>
           
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-text-primary">Password</Label>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                Password
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setResetEmail(email);
+                  setResetSuccess(false);
+                  setResetError(null);
+                  setForgotPasswordOpen(true);
+                }}
+                className="text-xs text-accent-primary hover:underline font-medium"
+              >
+                Forgot Password?
+              </button>
+            </div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
               <input 
-                type="password" 
+                type={showPassword ? "text" : "password"} 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-bg-primary border border-border rounded-lg pl-10 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent-primary focus:outline-none transition-colors"
+                className="w-full bg-bg-primary border border-border rounded-lg pl-10 pr-10 py-2.5 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent-primary focus:outline-none transition-colors"
                 required
+                autoComplete="current-password"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors p-1"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
           <Button 
             type="submit"
-            className="w-full py-6 bg-accent-primary hover:bg-accent-primary/90 text-white flex items-center gap-2 mt-2"
+            className="w-full py-5 bg-accent-primary hover:bg-accent-primary/90 text-white font-medium flex items-center justify-center gap-2 mt-4 shadow-sm"
             disabled={isSigningIn || loading}
           >
             {isSigningIn ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : null}
-            Sign In
+            <span>Sign In</span>
           </Button>
         </form>
 
-        <div className="relative mb-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-border"></div>
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-bg-elevated px-2 text-text-secondary">Or continue with</span>
-          </div>
-        </div>
-
-        <Button 
-          type="button"
-          variant="outline" 
-          className="w-full py-6 border-border text-text-primary hover:bg-bg-primary flex items-center gap-3"
-          onClick={handleGoogleSignIn}
-          disabled={isSigningIn || loading}
-        >
-          <svg viewBox="0 0 24 24" className="w-5 h-5">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-          </svg>
-          Google
-        </Button>
-        
         <p className="text-center text-sm text-text-secondary mt-6">
-          Don't have an account? <Link href="/sign-up" className="text-accent-primary hover:underline">Sign up</Link>
+          Don&apos;t have an account?{" "}
+          <Link href="/sign-up" className="text-accent-primary hover:underline font-medium">
+            Sign up
+          </Link>
         </p>
         <p className="text-center text-xs text-text-secondary mt-3">
           <Link href="/admin-login" className="text-text-secondary hover:text-accent-primary transition-colors">
@@ -162,10 +208,91 @@ export default function SignInPage() {
           </Link>
         </p>
       </div>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
+        <DialogContent className="sm:max-w-md bg-white border border-border p-6 rounded-2xl shadow-2xl">
+          <DialogHeader className="text-left space-y-2">
+            <div className="w-10 h-10 rounded-xl bg-accent-primary/10 flex items-center justify-center text-accent-primary">
+              <KeyRound className="w-5 h-5" />
+            </div>
+            <DialogTitle className="text-xl font-display font-bold text-text-primary">
+              Reset Your Password
+            </DialogTitle>
+            <DialogDescription className="text-sm text-text-secondary">
+              Enter your email address and we&apos;ll send you a secure link to reset your password.
+            </DialogDescription>
+          </DialogHeader>
+
+          {resetSuccess ? (
+            <div className="py-4 space-y-4 text-center">
+              <div className="w-12 h-12 rounded-full bg-accent-success/10 text-accent-success flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-semibold text-text-primary">Password Reset Link Sent</p>
+                <p className="text-xs text-text-secondary max-w-sm mx-auto">
+                  If an account exists with <span className="font-medium text-text-primary">{resetEmail}</span>, you will receive password reset instructions shortly.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setForgotPasswordOpen(false)}
+              >
+                Return to Login
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={handleResetPassword} className="space-y-4 pt-2">
+              {resetError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-lg flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span>{resetError}</span>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                  Account Email
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full bg-bg-primary border border-border rounded-lg pl-10 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent-primary focus:outline-none transition-colors"
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-1/2"
+                  onClick={() => setForgotPasswordOpen(false)}
+                  disabled={resetLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="w-1/2 bg-accent-primary hover:bg-accent-primary/90 text-white"
+                  disabled={resetLoading}
+                >
+                  {resetLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
+                  <span>Send Link</span>
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
-
-function Label({ children, className }: { children: React.ReactNode, className?: string }) {
-  return <label className={`block ${className || ''}`}>{children}</label>;
 }

@@ -24,6 +24,7 @@ import disputeRoutes from "./routes/disputes";
 import evidenceRoutes from "./routes/evidence";
 import verdictRoutes from "./routes/verdicts";
 import adminRoutes from "./routes/admin";
+import notificationRoutes from "./routes/notifications";
 
 const app: any = express();
 const httpServer = createServer(app);
@@ -54,7 +55,8 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 
 // Root info
@@ -83,6 +85,7 @@ app.use("/api/disputes", disputeRoutes);
 app.use("/api/evidence", evidenceRoutes);
 app.use("/api/verdicts", verdictRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);

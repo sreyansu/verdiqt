@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Contract, Milestone, EscrowWallet, User } from "../models";
 import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
+import { createInAppNotification } from "../services/notificationService";
 
 const router: any = Router();
 
@@ -121,6 +122,15 @@ router.post(
         .populate("client")
         .populate("freelancer")
         .populate("milestones");
+
+      createInAppNotification({
+        recipientId: freelancer._id,
+        type: "CONTRACT_CREATED",
+        title: "New Contract Proposed",
+        message: `${user.name} proposed a new contract: "${title}"`,
+        relatedEntity: { entityType: "Contract", entityId: contract._id.toString() },
+        targetRoute: `/contracts/${contract._id}`,
+      }).catch(console.error);
 
       res.status(201).json({ success: true, data: populatedContract });
     } catch (error) {
@@ -253,6 +263,15 @@ router.patch(
         await User.findByIdAndUpdate(contract.clientId, {
           $inc: { walletBalance: -contract.totalAmount },
         });
+
+        createInAppNotification({
+          recipientId: contract.clientId,
+          type: "CONTRACT_ACCEPTED",
+          title: "Contract Accepted",
+          message: `${user.name} accepted the contract: "${contract.title}"`,
+          relatedEntity: { entityType: "Contract", entityId: contract._id.toString() },
+          targetRoute: `/contracts/${contract._id}`,
+        }).catch(console.error);
       }
 
       const updated = await Contract.findByIdAndUpdate(

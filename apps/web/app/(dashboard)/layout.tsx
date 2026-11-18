@@ -3,6 +3,7 @@
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
 import { useAuth } from "@/providers/AuthProvider";
+import { EmailVerificationGate } from "@/components/auth/EmailVerificationGate";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
@@ -12,7 +13,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading } = useAuth();
+  const { user, dbUser, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -27,6 +28,11 @@ export default function DashboardLayout({
         <Loader2 className="w-8 h-8 text-accent-primary animate-spin" />
       </div>
     );
+  }
+
+  // Mandatory email verification for regular client and freelancer users
+  if (!user.emailVerified && dbUser?.role !== "ADMIN") {
+    return <EmailVerificationGate />;
   }
 
   return (
