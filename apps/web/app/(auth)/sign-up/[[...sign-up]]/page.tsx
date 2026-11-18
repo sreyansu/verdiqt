@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Mail, Lock, User } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Scale, ArrowLeft } from "lucide-react";
 
 export default function SignUpPage() {
@@ -64,8 +65,15 @@ export default function SignUpPage() {
 
       <div className="w-full max-w-md p-8 glass-elevated rounded-2xl border border-border my-8">
         <div className="flex justify-center items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-lg bg-accent-primary flex items-center justify-center">
-            <Scale className="w-6 h-6 text-white" />
+          <div className="w-11 h-11 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0">
+            <Image
+              src="/verdiqt-icon.png"
+              alt="Verdiqt Logo"
+              width={44}
+              height={44}
+              className="w-full h-full object-contain"
+              priority
+            />
           </div>
           <span className="font-display font-bold text-2xl gradient-text">Verdiqt</span>
         </div>

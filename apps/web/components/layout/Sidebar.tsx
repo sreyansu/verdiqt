@@ -18,6 +18,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useUserStore } from "@/store/userStore";
 import { useAuth } from "@/providers/AuthProvider";
 const adminNavItems = [
@@ -50,8 +51,15 @@ export default function Sidebar() {
     >
       {/* Logo */}
       <Link href="/" className="flex items-center gap-3 px-5 py-6 border-b border-border hover:bg-bg-elevated transition-colors">
-        <div className="w-9 h-9 rounded-lg bg-accent-primary flex items-center justify-center flex-shrink-0">
-          <Scale className="w-5 h-5 text-white" />
+        <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0">
+          <Image
+            src="/verdiqt-icon.png"
+            alt="Verdiqt Logo"
+            width={36}
+            height={36}
+            className="w-full h-full object-contain"
+            priority
+          />
         </div>
         <AnimatePresence>
           {!collapsed && (
