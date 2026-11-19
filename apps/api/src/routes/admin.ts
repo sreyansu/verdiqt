@@ -5,6 +5,7 @@ import { requireAuthWithUser, requireAdmin } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
 import { getIO } from "../lib/socket";
 import { runMediationEngine } from "../services/mediationEngine";
+import { executeTribunalGraph } from "../services/tribunalGraph";
 
 const router: any = Router();
 
@@ -407,70 +408,33 @@ router.post(
 
       // Run AI mediation
       try {
-        const contract = dispute.contract || {};
-        const milestones = contract.milestones || [];
-        const evidence = dispute.evidence || [];
+        const runId = `ADMIN-RUN-${dispute._id}-${Date.now()}`;
+        const graphResult = await executeTribunalGraph({
+          disputeId: dispute._id.toString(),
+          analysisRunId: runId,
+          disputeVersion: dispute.version || 1,
+        });
 
-        const verdict = await runMediationEngine(
-          {
-            contractTitle: contract.title || "",
-            contractDescription: contract.description || "",
-            totalAmount: contract.totalAmount || 0,
-            milestones: milestones.map((m: any) => ({
-              title: m.title,
-              description: m.description,
-              amount: m.amount,
-              status: m.status,
-              dueDate: m.dueDate ? new Date(m.dueDate).toISOString() : "",
-            })),
-            clientStatement: dispute.clientStatement || "",
-            freelancerStatement: dispute.freelancerStatement || "",
-            evidenceItems: evidence.map((e: any) => ({
-              id: (e._id || e.id).toString(),
-              fileName: e.fileName,
-              fileUrl: e.fileUrl,
-              fileType: e.fileType,
-              description: e.description,
-              uploadedByRole: e.uploadedById?.toString() === contract.clientId?.toString() ? "CLIENT" : "FREELANCER",
-            })),
-            evidenceSummaries: evidence.map(
-              (e: any) => `${e.fileName} (${e.fileType}): ${e.description || "No description"}`
-            ),
-            disputeTitle: dispute.title,
-          },
-          challengeCtx
-        );
+        const verdict = graphResult.finalVerdict;
+        if (!verdict) {
+          throw new Error("Tribunal graph did not yield a valid final verdict");
+        }
 
         // Save verdict
         const savedVerdict = await Verdict.create({
+          ...verdict,
           disputeId: dispute._id,
-          clientFaultPercent: verdict.clientFaultPercent,
-          freelancerFaultPercent: verdict.freelancerFaultPercent,
-          clientRefundPercent: verdict.clientRefundPercent,
-          freelancerReleasePercent: verdict.freelancerReleasePercent,
-          reasoning: verdict.reasoning,
-          contractAnalysis: verdict.contractAnalysis,
-          evidenceSummary: verdict.evidenceSummary,
-          legalBasis: verdict.legalBasis,
-          escalationReason: verdict.escalationReason,
-          confidenceScore: verdict.confidenceScore,
-          escalatedToHuman: verdict.escalatedToHuman,
-          clientAdvocateReport: verdict.clientAdvocateReport,
-          freelancerDefenseReport: verdict.freelancerDefenseReport,
-          forensicAuditReport: verdict.forensicAuditReport,
-          quantumMeruitCalculation: verdict.quantumMeruitCalculation as any,
-          awardHash: verdict.awardHash,
-          modelUsed: verdict.modelUsed || "gemini-4-hydrogen (Multi-Agent ODR with Medium Thinking)",
         });
 
         // Update dispute status
+        const nextStatus = verdict.escalatedToHuman ? "ESCALATED" : "VERDICT_READY";
         await Dispute.findByIdAndUpdate(req.params.id, {
-          $set: { status: "VERDICT_READY" },
+          $set: { status: nextStatus },
         });
 
         io.to(`dispute:${disputeIdStr}`).emit("disputeStatusChange", {
           disputeId: disputeIdStr,
-          status: "VERDICT_READY",
+          status: nextStatus,
         });
 
         res.json({ success: true, data: savedVerdict });

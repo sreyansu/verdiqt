@@ -324,16 +324,21 @@ export default function ContractDetailPage() {
 
   const handleMilestoneAction = async (milestoneId: string, status: string, reason?: string) => {
     try {
-      await api.patch(`/milestones/${milestoneId}`, {
-        status,
-        rejectionReason: reason,
-      });
+      const payload: { status: string; rejectionReason?: string } = { status };
+      if (typeof reason === "string") {
+        payload.rejectionReason = reason;
+      }
+      await api.patch(`/milestones/${milestoneId}`, payload);
       // Refresh entire contract to get updated escrow wallet and milestone statuses
       const { data } = await api.get(`/contracts/${id}`);
       setContract(data.data);
     } catch (error: any) {
       console.error("Milestone update error:", error);
-      alert(error.response?.data?.error || "Failed to update milestone status");
+      const details = error.response?.data?.details;
+      const errMsg = Array.isArray(details)
+        ? details.map((d: any) => `${d.field ? d.field + ": " : ""}${d.message}`).join("\n")
+        : error.response?.data?.error || "Failed to update milestone status";
+      alert(errMsg);
     }
   };
 
@@ -1033,12 +1038,18 @@ export default function ContractDetailPage() {
 
           <div className="space-y-3 py-2">
             <div>
-              <Label htmlFor="rejection-reason" className="text-xs font-semibold text-slate-700">
-                Revision Feedback / Rejection Reason
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="rejection-reason" className="text-xs font-semibold text-slate-700">
+                  Revision Feedback / Rejection Reason
+                </Label>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {rejectionReasonInput.length} / 5000
+                </span>
+              </div>
               <Textarea
                 id="rejection-reason"
                 rows={4}
+                maxLength={5000}
                 value={rejectionReasonInput}
                 onChange={(e) => setRejectionReasonInput(e.target.value)}
                 placeholder="e.g. Please update the UI based on the feedback in chat and provide the responsive mobile mockups..."

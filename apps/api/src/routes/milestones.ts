@@ -48,11 +48,11 @@ const createMilestoneSchema = z.object({
 
 const updateMilestoneSchema = z.object({
   status: z.enum(["PENDING", "SUBMITTED", "APPROVED", "REJECTED", "DISPUTED"]),
-  rejectionReason: z.string().max(1000).optional(),
+  rejectionReason: z.string().max(20000).nullish(),
 });
 
 const submitMilestoneSchema = z.object({
-  submissionNote: z.string().max(1000).optional(),
+  submissionNote: z.string().max(20000).nullish(),
 });
 
 // POST /api/milestones — Add milestone to contract

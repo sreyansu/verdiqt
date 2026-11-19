@@ -8,3 +8,5 @@ export * from "./Verdict";
 export * from "./Notification";
 export * from "./Conversation";
 export * from "./Message";
+export * from "./AnalysisRun";
+export * from "./HumanReview";

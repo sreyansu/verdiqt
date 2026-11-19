@@ -7,6 +7,12 @@ export interface IEvidence extends Document {
   fileName: string;
   fileUrl: string;
   fileType: string;
+  publicId?: string | null;
+  bytes?: number | null;
+  sha256Hash?: string | null;
+  mimeType?: string | null;
+  provenance?: string | null;
+  metadata?: Record<string, any> | null;
   description?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -32,6 +38,12 @@ const EvidenceSchema = new Schema<IEvidence>(
     fileName: { type: String, required: true },
     fileUrl: { type: String, required: true },
     fileType: { type: String, required: true },
+    publicId: { type: String, default: null },
+    bytes: { type: Number, default: null },
+    sha256Hash: { type: String, default: null },
+    mimeType: { type: String, default: null },
+    provenance: { type: String, default: null },
+    metadata: { type: Schema.Types.Mixed, default: null },
     description: { type: String, default: null },
   },
   {

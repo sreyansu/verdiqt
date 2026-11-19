@@ -27,6 +27,7 @@ import adminRoutes from "./routes/admin";
 import notificationRoutes from "./routes/notifications";
 import userRoutes from "./routes/users";
 import messageRoutes from "./routes/messages";
+import humanReviewRoutes from "./routes/humanReview";
 
 const app: any = express();
 const httpServer = createServer(app);
@@ -104,6 +105,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/human-review", humanReviewRoutes);
+app.use("/api/disputes", humanReviewRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);

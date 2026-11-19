@@ -20,6 +20,11 @@ import {
   ShieldAlert,
   Gavel,
   Send,
+  Eye,
+  Download,
+  Fingerprint,
+  FileCode,
+  ExternalLink,
 } from "lucide-react";
 import { useAuthenticatedApi } from "@/lib/useAuthenticatedApi";
 import { useDisputeRealtime } from "@/hooks/useRealtime";
@@ -53,6 +58,9 @@ export default function DisputeDetailPage() {
   const [responding, setResponding] = useState(false);
   const [markingReady, setMarkingReady] = useState(false);
 
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
   const fetchDispute = useCallback(async () => {
     try {
       const { data } = await api.get(`/disputes/${id}`);
@@ -71,7 +79,7 @@ export default function DisputeDetailPage() {
   // Realtime status updates
   useDisputeRealtime(id as string, (newStatus) => {
     setDispute((prev: any) => (prev ? { ...prev, status: newStatus } : prev));
-    if (["VERDICT_READY", "RESOLVED", "CHALLENGED", "ESCALATED", "AWAITING_AI"].includes(newStatus)) {
+    if (["VERDICT_READY", "RESOLVED", "CHALLENGED", "ESCALATED", "AWAITING_AI", "AI_ANALYZING"].includes(newStatus)) {
       fetchDispute(); // Refetch to get updated data
     }
   });
@@ -100,6 +108,48 @@ export default function DisputeDetailPage() {
       console.error("Failed to mark ready:", error);
     } finally {
       setMarkingReady(false);
+    }
+  };
+
+  const handlePreviewEvidence = async (evidenceId: string, fileName: string) => {
+    setPreviewingId(evidenceId);
+    try {
+      const res = await api.get(`/evidence/${evidenceId}/preview`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], {
+        type: res.headers["content-type"] || "application/octet-stream",
+      });
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, "_blank");
+    } catch (err) {
+      console.error("Preview failed:", err);
+    } finally {
+      setPreviewingId(null);
+    }
+  };
+
+  const handleDownloadEvidence = async (evidenceId: string, fileName: string) => {
+    setDownloadingId(evidenceId);
+    try {
+      const res = await api.get(`/evidence/${evidenceId}/download`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], {
+        type: res.headers["content-type"] || "application/octet-stream",
+      });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Download failed:", err);
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -145,7 +195,12 @@ export default function DisputeDetailPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="font-display text-xl sm:text-2xl font-bold truncate">{dispute.title}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-xl sm:text-2xl font-bold truncate">{dispute.title}</h1>
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-accent-primary/10 text-accent-primary border border-accent-primary/20">
+              v{dispute.version || 1}
+            </span>
+          </div>
           <p className="text-text-secondary mt-1 text-sm sm:text-base truncate">
             Contract: {dispute.contract?.title}
           </p>
@@ -205,9 +260,9 @@ export default function DisputeDetailPage() {
         >
           <Card className="glass-elevated p-6 rounded-xl border-accent-warning/30 text-center">
             <Brain className="w-10 h-10 text-accent-warning mx-auto mb-3 animate-pulse" />
-            <h3 className="font-display text-lg font-bold mb-1">AI Analysis in Progress</h3>
-            <p className="text-text-secondary text-sm">
-              The administrator has initiated AI analysis of this dispute. Please wait while the system evaluates all statements and evidence.
+            <h3 className="font-display text-lg font-bold mb-1">AI Arbitration Tribunal Deliberating</h3>
+            <p className="text-text-secondary text-sm max-w-lg mx-auto">
+              The multi-agent tribunal pipeline is currently running. Digital forensic evidence is being audited, contractual obligations verified, and adversarial legal arguments synthesized.
             </p>
           </Card>
         </motion.div>
@@ -222,13 +277,13 @@ export default function DisputeDetailPage() {
             <div className="flex items-start gap-3">
               <ShieldAlert className="w-6 h-6 text-accent-warning flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-display font-semibold mb-1">Verdict Under Re-Review</h3>
+                <h3 className="font-display font-semibold mb-1">Award Under Re-Deliberation</h3>
                 <p className="text-text-secondary text-sm mb-2">
-                  The previous verdict has been challenged. An administrator will re-analyze this dispute considering the challenge.
+                  The previous arbitral award has been challenged. The tribunal pipeline is re-examining the dispute taking into account the formal legal challenge.
                 </p>
                 {dispute.challengeReason && (
                   <div className="p-3 bg-bg-primary rounded-lg border border-border mt-2">
-                    <p className="text-xs text-text-secondary mb-1">Challenge Reason:</p>
+                    <p className="text-xs text-text-secondary mb-1">Challenge Grounds:</p>
                     <p className="text-sm text-text-primary">&ldquo;{dispute.challengeReason}&rdquo;</p>
                   </div>
                 )}
@@ -241,19 +296,30 @@ export default function DisputeDetailPage() {
         </motion.div>
       )}
 
-      {dispute.status === "ESCALATED" && (
+      {(dispute.status === "ESCALATED" || dispute.humanReviewRequested) && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <Card className="glass-elevated p-6 rounded-xl border-accent-danger/30">
+          <Card className="glass-elevated p-6 rounded-xl border-accent-danger/40 bg-accent-danger/5">
             <div className="flex items-start gap-3">
               <Gavel className="w-6 h-6 text-accent-danger flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-display font-semibold mb-1">Escalated to Human Administrator</h3>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display font-bold text-accent-danger text-base">
+                    Escalated to Independent Human Arbitral Review
+                  </h3>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-accent-danger/20 text-accent-danger border border-accent-danger/30">
+                    Settlement Frozen
+                  </span>
+                </div>
                 <p className="text-text-secondary text-sm">
-                  This dispute has been escalated for manual review by a platform administrator. You will be notified once a decision is made. The administrator will review all evidence, statements, and any prior AI analysis before making a final determination.
+                  This dispute has been escalated for independent human arbitration. All automated settlement releases and escrow disbursements are frozen until the appointed human reviewer certifies a final decision.
                 </p>
+                <div className="flex flex-wrap items-center gap-4 text-xs text-text-secondary pt-1">
+                  <span>Dispute Version: <strong className="text-text-primary">v{dispute.version || 1}</strong></span>
+                  <span>Review Status: <strong className="text-accent-warning">PENDING HUMAN ASSIGNMENT</strong></span>
+                </div>
               </div>
             </div>
           </Card>
@@ -345,35 +411,98 @@ export default function DisputeDetailPage() {
       <Card className="glass-elevated p-6 rounded-xl border-border">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display font-semibold flex items-center gap-2">
-            <FileText className="w-4 h-4" />
-            Evidence ({dispute.evidence?.length || 0})
+            <FileText className="w-4 h-4 text-accent-primary" />
+            Digital Evidence &amp; Chain of Custody ({dispute.evidence?.length || 0})
           </h3>
+          <span className="text-xs text-text-secondary">
+            Section 63 BSA 2023 Compliant
+          </span>
         </div>
 
         {dispute.evidence && dispute.evidence.length > 0 && (
           <div className="grid gap-3 mb-4">
-            {dispute.evidence.map((ev: any) => (
-              <div
-                key={ev.id}
-                className="flex items-center gap-3 p-3 bg-bg-primary rounded-lg border border-border"
-              >
-                <FileText className="w-4 h-4 text-text-secondary flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{ev.fileName}</p>
-                  <p className="text-xs text-text-secondary">
-                    by {ev.uploadedBy?.name} • {ev.fileType}
-                  </p>
-                </div>
-                <a
-                  href={ev.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-accent-primary hover:underline"
+            {dispute.evidence.map((ev: any) => {
+              const evId = ev._id || ev.id;
+              const hasSha256 = !!ev.sha256Hash;
+              const category = ev.metadata?.category || "DOCUMENT";
+
+              return (
+                <div
+                  key={evId}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-bg-primary rounded-lg border border-border"
                 >
-                  View
-                </a>
-              </div>
-            ))}
+                  <div className="flex items-start gap-3 min-w-0">
+                    <FileText className="w-4 h-4 text-text-secondary flex-shrink-0 mt-1" />
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-text-primary truncate max-w-xs sm:max-w-md">
+                          {ev.fileName}
+                        </p>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase bg-bg-elevated border border-border text-text-secondary">
+                          {category}
+                        </span>
+                      </div>
+                      <p className="text-xs text-text-secondary">
+                        by {ev.uploadedBy?.name || "Participant"} • {ev.fileType}
+                      </p>
+                      {hasSha256 && (
+                        <div className="flex items-center gap-1 text-[11px] font-mono text-text-secondary">
+                          <Fingerprint className="w-3 h-3 text-accent-primary flex-shrink-0" />
+                          <span>SHA-256: {ev.sha256Hash.slice(0, 10)}...{ev.sha256Hash.slice(-8)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Authenticated Preview */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePreviewEvidence(evId, ev.fileName)}
+                      disabled={previewingId === evId}
+                      className="text-xs h-8 border-accent-primary/40 text-accent-primary hover:bg-accent-primary/10"
+                    >
+                      {previewingId === evId ? (
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      ) : (
+                        <Eye className="w-3 h-3 mr-1" />
+                      )}
+                      Preview
+                    </Button>
+
+                    {/* Authenticated Download */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDownloadEvidence(evId, ev.fileName)}
+                      disabled={downloadingId === evId}
+                      className="text-xs h-8 border-border text-text-secondary hover:text-text-primary"
+                    >
+                      {downloadingId === evId ? (
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      ) : (
+                        <Download className="w-3 h-3 mr-1" />
+                      )}
+                      Download
+                    </Button>
+
+                    {/* Direct external link fallback */}
+                    {ev.fileUrl && (
+                      <a
+                        href={ev.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg border border-border hover:bg-bg-elevated text-text-secondary hover:text-text-primary"
+                        title="Direct Link"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -394,10 +523,10 @@ export default function DisputeDetailPage() {
             <div className="text-center mb-6">
               <Send className="w-10 h-10 text-accent-primary mx-auto mb-3" />
               <h3 className="font-display text-lg font-bold mb-2">
-                Ready for AI Arbitration?
+                Ready for AI Arbitration Tribunal?
               </h3>
               <p className="text-text-secondary text-sm max-w-lg mx-auto">
-                Once both parties mark &ldquo;Ready for Review&rdquo;, the dispute will be sent to the platform administrator who will trigger AI arbitration analysis.
+                Once both parties mark &ldquo;Ready for Review&rdquo;, the autonomous AI arbitration tribunal will immediately analyze the dispute, evaluate forensic evidence, and generate an arbitral settlement recommendation.
               </p>
             </div>
 
@@ -453,7 +582,7 @@ export default function DisputeDetailPage() {
                   Mark Ready for Review
                 </Button>
                 <p className="text-xs text-text-secondary mt-2">
-                  Make sure you&apos;ve uploaded all your evidence before marking ready.
+                  Make sure you&apos;ve uploaded all your evidence before marking ready. Adding new evidence later will automatically reopen readiness verification.
                 </p>
               </div>
             )}
@@ -480,9 +609,9 @@ export default function DisputeDetailPage() {
         >
           <Card className="glass-elevated p-6 rounded-xl border-accent-primary/30 text-center">
             <Send className="w-10 h-10 text-accent-primary mx-auto mb-3" />
-            <h3 className="font-display text-lg font-bold mb-1">Ready for AI Analysis</h3>
-            <p className="text-text-secondary text-sm">
-              Both parties have marked ready. The platform administrator will now review and initiate AI arbitration analysis. You will be notified when a verdict is ready.
+            <h3 className="font-display text-lg font-bold mb-1">Autonomous AI Analysis Initiating</h3>
+            <p className="text-text-secondary text-sm max-w-lg mx-auto">
+              Both parties have certified readiness. The autonomous tribunal engine has queued this dispute for multi-agent deliberation and forensic evaluation.
             </p>
           </Card>
         </motion.div>

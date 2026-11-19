@@ -280,8 +280,115 @@ export interface Verdict {
   confidenceScore: number;
   escalatedToHuman: boolean;
   modelUsed: string;
+  legalBasis?: string | null;
+  escalationReason?: string | null;
+  clientAdvocateReport?: string | null;
+  freelancerDefenseReport?: string | null;
+  forensicAuditReport?: string | null;
+  juryPanelReport?: string | null;
+  criterionAssessments?: CriterionAssessment[];
+  valuationResult?: ValuationResult;
+  quantumMeruitCalculation?: any;
+  awardHash?: string | null;
+  analysisRunId?: string | null;
   createdAt: Date;
   acceptedAt?: Date;
+}
+
+// ─── Neuro-Symbolic Quantum Meruit Engine (NS-QME) Types ──────────────────────
+
+export type CriterionStatus =
+  | "VERIFIED_MET"
+  | "PARTIALLY_MET_WITH_DEFECTS"
+  | "UNVERIFIED"
+  | "NOT_MET";
+
+export interface ContractualObligation {
+  obligationId: string;
+  milestoneId: string;
+  description: string;
+  acceptanceCriteria: string[];
+  deliverables: string[];
+  dueDate?: string;
+  contractualValue?: number;
+  weight?: number;
+  revisionPolicy?: string;
+  sourceReference: string;
+}
+
+export interface CriterionAssessment {
+  criterionId: string;
+  contractualObligationId: string;
+  description: string;
+  preAgreedWeight?: number;
+  status: CriterionStatus;
+  supportingEvidenceIds: string[];
+  contradictingEvidenceIds: string[];
+  reasoning: string;
+  uncertaintyReason?: string;
+  reviewerRequired: boolean;
+  rubricVersion: string;
+}
+
+export interface AppliedAdjustment {
+  type: string;
+  amount: number;
+  contractualBasis: string;
+  evidenceIds: string[];
+}
+
+export interface ValuationResult {
+  disputeId: string;
+  currency: string;
+  disputedEscrowAmount: number;
+  supportedCompletionLowerBound: number;
+  supportedCompletionUpperBound: number;
+  estimatedValueLowerBound: number;
+  estimatedValueUpperBound: number;
+  recommendedReleaseAmount: number;
+  recommendedRefundAmount: number;
+  recommendedReleasePercent: number;
+  recommendedRefundPercent: number;
+  appliedAdjustments: AppliedAdjustment[];
+  unverifiedCriteria: string[];
+  requiresHumanReview: boolean;
+  abstentionReason?: string | null;
+  calculationBreakdown: string[];
+  calculationVersion: string;
+}
+
+export interface LegalSourceMetadata {
+  sourceId: string;
+  jurisdiction: string;
+  statute: string;
+  section?: string;
+  officialSourceUrl: string;
+  sourceVersion: string;
+  effectiveDate?: string;
+  contentHash: string;
+  keyPrinciples: string[];
+  verificationStatus: "VERIFIED" | "PENDING_REVIEW";
+}
+
+export interface HumanReviewItem {
+  id: string;
+  disputeId: string;
+  sourceAnalysisRunId?: string;
+  reviewVersion: number;
+  requestedByRole: "CLIENT" | "FREELANCER" | "SYSTEM_AUTOMATIC" | "ADMIN";
+  requestReason: string;
+  reviewType: "TECHNICAL" | "EVIDENCE" | "LEGAL" | "FULL";
+  status: "REQUESTED" | "ASSIGNED" | "IN_PROGRESS" | "AWAITING_INFORMATION" | "COMPLETED" | "CANCELLED";
+  reviewerId?: string;
+  reviewerName?: string;
+  conflictCheckStatus?: "CLEARED" | "FLAGGED" | "PENDING";
+  reviewerFindings?: string;
+  outcome?: "CONFIRM_RECOMMENDATION" | "MODIFY_RECOMMENDATION" | "REQUEST_MORE_EVIDENCE" | "UNABLE_TO_DETERMINE" | "RECOMMEND_NEGOTIATION";
+  modifiedRefundPercent?: number;
+  modifiedReleasePercent?: number;
+  outcomeReason?: string;
+  createdAt: Date;
+  completedAt?: Date;
 }
 
 // --- API Request/Response Types ---

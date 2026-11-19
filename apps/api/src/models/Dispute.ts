@@ -18,6 +18,17 @@ export interface IDispute extends Document {
     | "AWAITING_AI";
   clientReady: boolean;
   freelancerReady: boolean;
+  version: number;
+  activeAnalysisRunId?: string | null;
+  humanReviewId?: Types.ObjectId | null;
+  humanReviewRequested: boolean;
+  auditTrail: Array<{
+    action: string;
+    actorId?: Types.ObjectId | string | null;
+    actorRole?: string | null;
+    timestamp: Date;
+    details?: any;
+  }>;
   challengeReason?: string | null;
   challengedById?: Types.ObjectId | null;
   challengeCount: number;
@@ -65,6 +76,19 @@ const DisputeSchema = new Schema<IDispute>(
     },
     clientReady: { type: Boolean, default: false },
     freelancerReady: { type: Boolean, default: false },
+    version: { type: Number, default: 1 },
+    activeAnalysisRunId: { type: String, default: null },
+    humanReviewId: { type: Schema.Types.ObjectId, ref: "HumanReview", default: null },
+    humanReviewRequested: { type: Boolean, default: false },
+    auditTrail: [
+      {
+        action: { type: String, required: true },
+        actorId: { type: Schema.Types.Mixed, default: null },
+        actorRole: { type: String, default: null },
+        timestamp: { type: Date, default: Date.now },
+        details: { type: Schema.Types.Mixed, default: null },
+      },
+    ],
     challengeReason: { type: String, default: null },
     challengedById: {
       type: Schema.Types.ObjectId,

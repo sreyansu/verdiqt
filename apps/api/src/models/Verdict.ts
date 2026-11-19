@@ -19,6 +19,10 @@ export interface IVerdict extends Document {
   freelancerDefenseReport?: string | null;
   forensicAuditReport?: string | null;
   juryPanelReport?: string | null;
+  criterionAssessments?: any[];
+  valuationResult?: any;
+  structuredReport?: any;
+  analysisRunId?: string | null;
   quantumMeruitCalculation?: any;
   awardHash?: string | null;
   acceptedAt?: Date | null;
@@ -53,6 +57,10 @@ const VerdictSchema = new Schema<IVerdict>(
     freelancerDefenseReport: { type: String, default: null },
     forensicAuditReport: { type: String, default: null },
     juryPanelReport: { type: String, default: null },
+    criterionAssessments: { type: Schema.Types.Mixed, default: [] },
+    valuationResult: { type: Schema.Types.Mixed, default: null },
+    structuredReport: { type: Schema.Types.Mixed, default: null },
+    analysisRunId: { type: String, default: null },
     quantumMeruitCalculation: { type: Schema.Types.Mixed, default: null },
     awardHash: { type: String, default: null },
     acceptedAt: { type: Date, default: null },

@@ -5,6 +5,7 @@ import { requireAuthWithUser } from "../middleware/firebaseAuth";
 import { validate } from "../middleware/validate";
 import { getIO } from "../lib/socket";
 import { createInAppNotification } from "../services/notificationService";
+import { analysisQueue } from "../services/analysisQueue";
 
 const router: any = Router();
 
@@ -382,9 +383,20 @@ router.patch(
         updateData.status = "AWAITING_AI";
       }
 
-      const updated = await Dispute.findByIdAndUpdate(
+      const updated: any = await Dispute.findByIdAndUpdate(
         req.params.id,
-        { $set: updateData },
+        {
+          $set: updateData,
+          $push: {
+            auditTrail: {
+              action: isClient ? "CLIENT_MARKED_READY" : "FREELANCER_MARKED_READY",
+              actorId: userId,
+              actorRole: isClient ? "CLIENT" : "FREELANCER",
+              timestamp: new Date(),
+              details: { bothReady: otherReady },
+            },
+          },
+        },
         { new: true }
       );
 
@@ -392,7 +404,7 @@ router.patch(
       const io = getIO();
       const disputeIdStr = (dispute._id || dispute.id).toString();
       if (otherReady) {
-        // Both ready — notify everyone including admin
+        // Both ready — broadcast and automatically enqueue idempotent tribunal analysis
         io.to(`dispute:${disputeIdStr}`).emit("disputeStatusChange", {
           disputeId: disputeIdStr,
           status: "AWAITING_AI",
@@ -400,7 +412,12 @@ router.patch(
         io.emit("adminNotification", {
           type: "DISPUTE_READY_FOR_AI",
           disputeId: disputeIdStr,
-          message: `Dispute "${dispute.title}" is ready for AI analysis — both parties have submitted evidence.`,
+          message: `Dispute "${dispute.title}" is ready. Autonomous LangGraph tribunal analysis has been automatically dispatched.`,
+        });
+
+        // Trigger autonomous LangGraph DAG queue
+        analysisQueue.enqueue(disputeIdStr).catch((queueErr) => {
+          console.error(`[DisputeReady] Failed to enqueue dispute ${disputeIdStr}:`, queueErr);
         });
       } else {
         // One party ready — notify the dispute room
@@ -415,7 +432,7 @@ router.patch(
         success: true,
         data: updated,
         message: otherReady
-          ? "Both parties ready — dispute sent for AI analysis review."
+          ? "Both parties ready — autonomous AI arbitration tribunal has started."
           : `You've marked ready. Waiting for the other party.`,
       });
     } catch (error) {
